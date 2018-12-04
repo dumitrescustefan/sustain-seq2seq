@@ -1,6 +1,6 @@
 import requests, os, sys, json
 import tarfile
-
+import unicodedata
 
 def process_tgz(tgz_file, dest_folder, size):
     if not os.path.exists(dest_folder):
@@ -69,12 +69,25 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
     x = []
     y = []
     br = False
-    x.append(content[0])
+    
+    line = content[0].replace(u'\xa0', u' ')
+    line = line.replace(u'\u00a320M', u'-')                    
+    line = unicodedata.normalize('NFKD', line)#.encode('ascii','ignore')
+    
+    x.append(line)
     for i in range(1, len(content)): 
         if content[i] == "":
             continue
         
         line = content[i].replace(u'\xa0', u' ')
+        line = line.replace(u'\u00a320M', u'-')                
+        #print()
+        #print(line)
+        line = unicodedata.normalize('NFKD', line)#.encode('ascii','ignore')
+        #print(line)
+        #input("")
+        #\u00a320
+        
         if line == "@highlight":
             state = 1 # switch to writing to y
 
@@ -84,8 +97,6 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
             else: # concat to last sentence
                 x[-1] = x[-1] + " " + line
         else:
-            #if "Leslie Schuler" in line:
-            #    br = True
             if line == "@highlight" or line == "":
                 continue                
             if content[i-1] == "": # add to new sentence
@@ -97,18 +108,17 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
     y = [elem.replace("NEW: ","").replace("New :","").strip() for elem in y]
     
     
-    
-    print()
-    print(x)
-    print(y)
-    
-    #if br:
-    #    print(content)
-    #    input("???")
-                
+    #print()
+    #print(x)
+    #print(y)
+            
     if len(y) == 0 or len(x) == 0:
         print(content)
-        input("???")
+        print("\n x and y below:")
+        print(x)
+        print(y)    
+        input("ERROR")
+        
     return x, y
     
     
