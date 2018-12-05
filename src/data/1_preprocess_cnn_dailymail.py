@@ -1,4 +1,4 @@
-import requests, os, sys, json
+import requests, os, sys, json, string
 import tarfile
 import unicodedata
 
@@ -59,8 +59,8 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
     #print(">>>>>>>>>>>>>>>>>>>>>>>>")
     #print(content[0])
     
-    print("\n\n\n------")
-    print(content)
+    #print("\n\n\n------")
+    #print(content)
 
     
     # normal process
@@ -68,7 +68,7 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
     state = 0
     x = []
     y = []
-    br = False
+    
     
     line = content[0].replace(u'\xa0', u' ')
     line = line.replace(u'\u00a320M', u'-')                    
@@ -107,6 +107,9 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
     # after processing
     y = [elem.replace("NEW: ","").replace("New :","").strip() for elem in y]
     
+    for i in range(len(y)):
+        if y[i][-1] not in string.punctuation:
+            y[i] += "."
     
     #print()
     #print(x)
