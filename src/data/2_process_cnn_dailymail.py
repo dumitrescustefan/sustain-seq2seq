@@ -93,16 +93,16 @@ def process_folder(input_folder, dest_folder, size, nlp_core):
         os.makedirs(dest_folder)
 
     import glob
-    json_files = glob.glob(os.path.join(input_folder,"*.json"))
-
-    for json_file in json_files:
-        
+    json_files = sorted(glob.glob(os.path.join(input_folder,"*.json")))
+    print(json_files)
+    for json_file in json_files:        
         batch = []
         print("Processing "+json_file)        
         js = json.load(open(json_file))
         
         for article in js:
             sys.stdout.write(".")
+            sys.stdout.flush()
             tokenized_original_sentences, entity_anonimized_sentences = process_document(article["x"], nlp_core)
             article["x_tokenized_original_sentences"] = tokenized_original_sentences
             article["x_entity_anonimized_sentences"] = entity_anonimized_sentences
@@ -110,11 +110,11 @@ def process_folder(input_folder, dest_folder, size, nlp_core):
             article["y_tokenized_original_sentences"] = tokenized_original_sentences
             article["y_entity_anonimized_sentences"] = entity_anonimized_sentences
             batch.append(article)
-            break
+            #break
         
         head, filename = os.path.split(json_file)        
         json.dump(batch, open(os.path.join(dest_folder, filename),"w",encoding="utf-8"), indent=4, sort_keys=True)
-        break
+        #break
   
   
   
@@ -130,6 +130,6 @@ print("Done.")
 
 process_folder(os.path.join("raw","cnn"), os.path.join("processed","cnn"), 1000, nlp_core)
 
-process_folder(os.path.join("raw","dm"), os.path.join("processed","dm"), 1000, nlp_core)
+#process_folder(os.path.join("raw","dm"), os.path.join("processed","dm"), 1000, nlp_core)
 
 
