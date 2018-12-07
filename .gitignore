@@ -1,6 +1,7 @@
 *.tgz
 *.json
 *.story
+*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
