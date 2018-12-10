@@ -7,7 +7,7 @@ import transformer.layers
 
 def get_non_pad_mask(seq):
     assert seq.dim() == 2
-    return seq.ne(Constants.PAD).type(torch.float).unsqueeze(-1)
+    return seq.ne(transformer.config.PAD).type(torch.float).unsqueeze(-1)
 
 def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
     ''' Sinusoid position encoding table '''
@@ -34,7 +34,7 @@ def get_attn_key_pad_mask(seq_k, seq_q):
 
     # Expand to fit the shape of key query attention matrix.
     len_q = seq_q.size(1)
-    padding_mask = seq_k.eq(Constants.PAD)
+    padding_mask = seq_k.eq(transformer.config.PAD)
     padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
 
     return padding_mask
@@ -63,14 +63,14 @@ class Encoder(nn.Module):
         n_position = len_max_seq + 1
 
         self.src_word_emb = nn.Embedding(
-            n_src_vocab, d_word_vec, padding_idx=Constants.PAD)
+            n_src_vocab, d_word_vec, padding_idx=transformer.config.PAD) # from the config.py file, index = 0
 
-        self.position_enc = nn.Embedding.from_pretrained(
+        self.position_enc = nn.Embedding.from_pretrained( # Creates Embedding instance from given 2-dimensional FloatTensor.
             get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
             freeze=True)
-
+    
         self.layer_stack = nn.ModuleList([
-            EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
+            transformer.layers.EncoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
             for _ in range(n_layers)])
 
     def forward(self, src_seq, src_pos, return_attns=False):
@@ -109,14 +109,14 @@ class Decoder(nn.Module):
         n_position = len_max_seq + 1
 
         self.tgt_word_emb = nn.Embedding(
-            n_tgt_vocab, d_word_vec, padding_idx=Constants.PAD)
+            n_tgt_vocab, d_word_vec, padding_idx=transformer.config.PAD)
 
         self.position_enc = nn.Embedding.from_pretrained(
             get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
             freeze=True)
 
         self.layer_stack = nn.ModuleList([
-            DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
+            transformer.layers.DecoderLayer(d_model, d_inner, n_head, d_k, d_v, dropout=dropout)
             for _ in range(n_layers)])
 
     def forward(self, tgt_seq, tgt_pos, src_seq, enc_output, return_attns=False):
