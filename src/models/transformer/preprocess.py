@@ -162,6 +162,10 @@ for input_file in tqdm(input_files, unit='json files', ncols=120, total=len(inpu
             test_X.append(x)
             test_y.append(y)
     
+# save settings
+json.dump(arg, open(os.path.join(arg["output_folder"],"preprocess_settings.json"),"w",encoding="utf-8"), indent=4, sort_keys=True)
+
+# save train dev test
 import torch
 torch.save(train_X,os.path.join(arg["output_folder"],"train_X.pt"))
 torch.save(train_y,os.path.join(arg["output_folder"],"train_y.pt"))
