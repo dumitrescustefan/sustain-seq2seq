@@ -1,3 +1,4 @@
+import sys
 import torch
 import torch.nn as nn
 import numpy as np
@@ -6,8 +7,34 @@ import transformer.layers
 
 
 def get_non_pad_mask(seq):
-    assert seq.dim() == 2
-    return seq.ne(transformer.config.PAD).type(torch.float).unsqueeze(-1)
+    assert seq.dim() == 2 # 64 * 399 ( 2 dims )
+    #print (seq.ne(transformer.config.PAD).type(torch.float).unsqueeze(-1).size())
+    return seq.ne(transformer.config.PAD).type(torch.float).unsqueeze(-1) #torch.Size([64, 399, 1]) 
+    # unsqueeze(-1) makes every element an array of this element
+    """
+    >>> py_list = [[1.,2.,3.,4.],[5.,6.,7.,8.],[9.,10.,11.,12.]]
+    >>> a = torch.FloatTensor(py_list)
+    >>> a.size()
+    torch.Size([3, 4])
+    >>> b = a.unsqueeze(-1)
+    >>> b
+    tensor([[[ 1.],
+             [ 2.],
+             [ 3.],
+             [ 4.]],
+
+            [[ 5.],
+             [ 6.],
+             [ 7.],
+             [ 8.]],
+
+            [[ 9.],
+             [10.],
+             [11.],
+             [12.]]])
+    """
+    # now the returned value torch.Size([64, 399, 1]) has for each of the 64 instances an array of max_len elements of [1] for words and [0] for pads
+    
 
 def get_sinusoid_encoding_table(n_position, d_hid, padding_idx=None):
     ''' Sinusoid position encoding table '''
@@ -33,11 +60,15 @@ def get_attn_key_pad_mask(seq_k, seq_q):
     ''' For masking out the padding part of key sequence. '''
 
     # Expand to fit the shape of key query attention matrix.
-    len_q = seq_q.size(1)
+    len_q = seq_q.size(1)  # seq_q is a batch_size tuple of padded ints, len_q is the size of the pads (max len of instance in this batch) , assume len_q = 399
+    
     padding_mask = seq_k.eq(transformer.config.PAD)
+    # padding_mask has same shape as seq_k but with 1s where pads were applied, zero for words (torch.Size([64, 300]))
+    
     padding_mask = padding_mask.unsqueeze(1).expand(-1, len_q, -1)  # b x lq x lk
-
-    return padding_mask
+    # first it becomes torch.Size([64, 1, 300]), then torch.Size([64, 399, 300]) 
+    # the mask replicates the _key_ padding _query_ times in the 2nd dimension
+    return padding_mask # torch.Size([64, 399, 300])
 
 def get_subsequent_mask(seq):
     ''' For masking out the subsequent info. '''
@@ -78,12 +109,14 @@ class Encoder(nn.Module):
         enc_slf_attn_list = []
 
         # -- Prepare masks
-        slf_attn_mask = get_attn_key_pad_mask(seq_k=src_seq, seq_q=src_seq)
+        slf_attn_mask = get_attn_key_pad_mask(seq_k=src_seq, seq_q=src_seq)        
         non_pad_mask = get_non_pad_mask(src_seq)
 
         # -- Forward
         enc_output = self.src_word_emb(src_seq) + self.position_enc(src_pos)
-
+        # src_word_emb is an nn.Embedding layer, to which we add element wise the positional embedding
+        #print(enc_output.size()) # torch.Size([64, 399, 512])
+        
         for enc_layer in self.layer_stack:
             enc_output, enc_slf_attn = enc_layer(
                 enc_output,
@@ -196,9 +229,8 @@ class Transformer(nn.Module):
             self.encoder.src_word_emb.weight = self.decoder.tgt_word_emb.weight
 
     def forward(self, src_seq, src_pos, tgt_seq, tgt_pos):
-
-        tgt_seq, tgt_pos = tgt_seq[:, :-1], tgt_pos[:, :-1]
-
+        tgt_seq, tgt_pos = tgt_seq[:, :-1], tgt_pos[:, :-1] # cuts the </s> from the end for the entire batch
+        # src_seq is a batchsize lenght tuple that contains padded integer Xes , for ex: (padded_x0, ... , padded_x63)
         enc_output, *_ = self.encoder(src_seq, src_pos)
         dec_output, *_ = self.decoder(tgt_seq, tgt_pos, src_seq, enc_output)
         seq_logit = self.tgt_word_prj(dec_output) * self.x_logit_scale

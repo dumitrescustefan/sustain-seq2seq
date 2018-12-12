@@ -100,10 +100,12 @@ def train_epoch(model, train_loader, optimizer, device, smoothing):
     n_word_correct = 0
 
     for batch in tqdm(train_loader, mininterval=2, desc='  - (Training)   ', leave=False):
+        # batch is a tuple of batch_size elements (64 x seq, 64 x pos, 64 y seq, 64 y pos) -> seq are padded ints (same len), pos are the positions of each element
+        
         # prepare data
-        src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
-        gold = tgt_seq[:, 1:]
-
+        src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)        
+        gold = tgt_seq[:, 1:] # gold cuts the first <s> from all Ys, is a Tensor
+        
         # forward
         optimizer.zero_grad()
         pred = model(src_seq, src_pos, tgt_seq, tgt_pos)
