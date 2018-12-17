@@ -55,7 +55,7 @@ class PositionwiseFeedForward(nn.Module):
         super().__init__()
         # torch.nn.Conv1d(in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True)
         self.w_1 = nn.Conv1d(d_in, d_hid, kernel_size = 1) # position-wise  
-        self.w_2 = nn.Conv1d(d_hid, d_in, 1) # position-wise
+        self.w_2 = nn.Conv1d(d_hid, d_in, kernel_size = 1) # position-wise
         self.layer_norm = nn.LayerNorm(d_in)
         self.dropout = nn.Dropout(dropout)
 

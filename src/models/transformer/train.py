@@ -257,8 +257,7 @@ def main():
             betas=(0.9, 0.98), eps=1e-09),
         arg["d_model"], arg["n_warmup_steps"])
 
-    train(transformer_network, train_loader, valid_loader, test_loader, optimizer, device, arg)
-    
+    train(transformer_network, train_loader, valid_loader, test_loader, optimizer, device, arg)    
     
 if __name__ == '__main__':
     main()
