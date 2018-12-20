@@ -375,7 +375,7 @@ def trainIters(encoder, decoder, n_iters, print_every=1000, plot_every=100, lear
     #showPlot(plot_losses)
 
 
-def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
+def predict(encoder, decoder, sentence, max_length=MAX_LENGTH):
     with torch.no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
         input_length = input_tensor.size()[0]
@@ -417,4 +417,4 @@ att_decoder = AttnDecoderRNN(output_lang.n_words, args['hidden_size'], args['dro
 
 trainIters(encoder, att_decoder, args['n_iters'], print_every=100, args['use_attention'])
 
-#output_words, attentions = evaluate(encoder, decoder, "je suis trop froid .")
+#output_words, attentions = predict(encoder, decoder, "je suis trop froid .")
