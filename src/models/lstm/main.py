@@ -19,13 +19,14 @@ print("Loading done, train instances {}, dev instances {}, test instances {}, vo
     len(test_loader.dataset.X),
     len(w2i)))
 
-"""
+""" x and y start with BOS (2), end with EOS(3), are padded with PAD (0) and unknown words are UNK (1)
 # example batch
 dataiter = iter(train_loader)
 # x_sequence, x_pos, y_sequence, y_pos = dataiter.next() # if pos loader is used
 x_sequence, y_sequence = dataiter.next()
 from pprint import pprint
-pprint(y_sequence[0]) # ex: tensor([    2, 12728, 49279, 13516,  4576, 25888,  1453,     1,  7975, 38296, ...])
+pprint(x_sequence[0])
+print(y_sequence[0]) # ex: tensor([    2, 12728, 49279, 13516,  4576, 25888,  1453,     1,  7975, 38296, ...])
 """
 
 # Instantiate the model w/ hyperparams

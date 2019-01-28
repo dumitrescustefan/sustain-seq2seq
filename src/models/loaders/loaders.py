@@ -127,9 +127,9 @@ class CNNDMDataset(torch.utils.data.Dataset):
         return self.X[idx], self.y[idx]
 
 def intlist2words(self, ints, index2words):
-        text = [self.index2words[x] for x in ints]
-        #return " ".join(text)
-        return text
+    text = [self.index2words[x] for x in ints]
+    #return " ".join(text)
+    return text
             
 def words2ints (words, word2index):
     ints = []
