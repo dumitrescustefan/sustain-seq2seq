@@ -1,4 +1,5 @@
 from pprint import pprint
+import time
 
 import torch
 import torch.nn as nn
@@ -53,7 +54,7 @@ class LSTMEncoderDecoder(nn.Module):
         """
         
         #return
-        print("\nStart training ...")                
+        print("\nStart training ...")
        
         criterion = nn.CrossEntropyLoss()
         
@@ -80,7 +81,9 @@ class LSTMEncoderDecoder(nn.Module):
             self.encoder.train()
             self.decoder.train()
             for x, y in train_loader: 
-                counter += 1                
+                counter += 1    
+                if counter > 5:
+                    break                
                 max_seq_len_x = x.size(1)
                 max_seq_len_y = y.size(1)
                 loss = 0
@@ -122,7 +125,7 @@ class LSTMEncoderDecoder(nn.Module):
                 
                 loss = 0                 
                 for i in range(max_seq_len_y): # why decoder_hidden is initialized in epoch and not in batch??
-                    print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
+                    #print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
                     
                     # force correct input in next step
                     decoder_input = torch.zeros(batch_size, 1, dtype = torch.long) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
@@ -164,73 +167,79 @@ class LSTMEncoderDecoder(nn.Module):
                 self.decoder_optimizer.step()
 
                 print("\t\t\tLoss: {}".format(loss.data.item()))
+                #break
                 
             # EVALUATION ####################################################################
+            start_time = time.time()
             self.encoder.eval()
             self.decoder.eval()
             encoder_hidden = self.encoder.init_hidden(batch_size)
             decoder_hidden = self.decoder.init_hidden(batch_size)
 
             counter = 0 
-            for x, y in valid_loader:
-                counter += 1                
-                max_seq_len_x = x.size(1)
-                max_seq_len_y = y.size(1)
-                loss = 0
-                print("  Epoch {}, eval batch: {}, max_seq_len_x: {}, max_seq_len_y: {}".format(e, counter, max_seq_len_x, max_seq_len_y))
-                if x.size(0) != batch_size:
-                    print("\t Incomplete batch, skipping.")
-                    continue
-                # print(x.size()) # x is a 64 * 399 tensor (batch*max_seq_len_x)               
+            with torch.no_grad():
+                for x, y in valid_loader:
+                    counter += 1  
+                    if counter > 5:
+                        break
+                    max_seq_len_x = x.size(1)
+                    max_seq_len_y = y.size(1)
+                    loss = 0
+                    print("  Epoch {}, eval batch: {}, max_seq_len_x: {}, max_seq_len_y: {}".format(e, counter, max_seq_len_x, max_seq_len_y))
+                    if x.size(0) != batch_size:
+                        print("\t Incomplete batch, skipping.")
+                        continue
+                    # print(x.size()) # x is a 64 * 399 tensor (batch*max_seq_len_x)               
 
-                if(self.train_on_gpu):
-                    x, y = inputs.x(), y.cuda()
-                
-                # Creating new variables for the hidden state, otherwise
-                # we'd backprop through the entire training history
-                encoder_hidden = tuple([each.data for each in encoder_hidden])
-                decoder_hidden = tuple([each.data for each in decoder_hidden])
-
-                encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
-                
-                # encoder_output is batch_size * max_seq_len_x * encoder_hidden
-                #print(encoder_output.size())
-                
-                # take last state of encoder as context # not necessary when using attention                
-                context = torch.zeros(batch_size, 1, self.encoder_hidden_dim)
-                for j in range(batch_size):
-                    for k in range(max_seq_len_x-1,0,-1):                        
-                        if x[j][k]!=0:
-                            #print("Found at "+str(k))
-                            context[j][0] = encoder_output[j][k]
-                            break
-                
-                # context is last state of the encoder batch_size * encoder_hidden_dim
-                
-                loss = 0                 
-                for i in range(max_seq_len_y): # why decoder_hidden is initialized in epoch and not in batch??
-                    print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
+                    if(self.train_on_gpu):
+                        x, y = inputs.x(), y.cuda()
                     
-                    # force correct input in next step
-                    decoder_input = torch.zeros(batch_size, 1, dtype = torch.long) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
+                    # Creating new variables for the hidden state, otherwise
+                    # we'd backprop through the entire training history
+                    encoder_hidden = tuple([each.data for each in encoder_hidden])
+                    decoder_hidden = tuple([each.data for each in decoder_hidden])
+
+                    encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
+                    
+                    # encoder_output is batch_size * max_seq_len_x * encoder_hidden
+                    #print(encoder_output.size())
+                    
+                    # take last state of encoder as context # not necessary when using attention                
+                    context = torch.zeros(batch_size, 1, self.encoder_hidden_dim)
                     for j in range(batch_size):
-                        decoder_input[j]=y[j][i]                        
-                    #print(decoder_input.size())
-                    _, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
-                    # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
-                    word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
+                        for k in range(max_seq_len_x-1,0,-1):                        
+                            if x[j][k]!=0:
+                                #print("Found at "+str(k))
+                                context[j][0] = encoder_output[j][k]
+                                break
                     
-                    #word_softmax_projection_array.append(word_softmax_projection)
-                    
-                    # now, select target y
-                    # y looks like batch_size * max_seq_len_y : tensor([[    2, 10890, 48108,  ...,     0,     0,     0], ... ... ..
-                    target_y = y[:,i] # select from y the ith column and shape as an array 
-                    # target_y now looks like [ 10, 2323, 5739, 24, 9785 ... ] of size 64 (batch_size)
-                    #print(word_softmax_projection.size())
-                    #print(target_y.size())
-                    loss += criterion(word_softmax_projection, target_y)   # ignore index ??  
-             
+                    # context is last state of the encoder batch_size * encoder_hidden_dim                
+                    loss = 0                 
+                    for i in range(max_seq_len_y): # why decoder_hidden is initialized in epoch and not in batch??
+                        #print("\t Decoder step {}/{}".format(i, max_seq_len_y))                        
+                        # force correct input in next step
+                        decoder_input = torch.zeros(batch_size, 1, dtype = torch.long) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
+                        for j in range(batch_size):
+                            decoder_input[j]=y[j][i]                        
+                        #print(decoder_input.size())
+                        _, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
+                        # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
+                        word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
+                        
+                        #word_softmax_projection_array.append(word_softmax_projection)
+                        
+                        # now, select target y
+                        # y looks like batch_size * max_seq_len_y : tensor([[    2, 10890, 48108,  ...,     0,     0,     0], ... ... ..
+                        target_y = y[:,i] # select from y the ith column and shape as an array 
+                        # target_y now looks like [ 10, 2323, 5739, 24, 9785 ... ] of size 64 (batch_size)
+                        #print(word_softmax_projection.size())
+                        #print(target_y.size())
+                        loss += criterion(word_softmax_projection, target_y)   # ignore index ??  
+                    print("\t\t\t Eval Loss: {}".format(loss.data.item()))
                 
+            elapsed_time = time.time() - start_time    
+            print(elapsed_time)
+            
     def load_checkpoint(filename, enc = None, dec = None):
         print("loading model...")
         checkpoint = torch.load(filename)
