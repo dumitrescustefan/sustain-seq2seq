@@ -1,23 +1,32 @@
 from pprint import pprint
-import time
+import time, io
 
 import torch
 import torch.nn as nn
 
-from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer
+from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, AttentionLayer
 
-    
-class LSTMEncoderDecoder(nn.Module):
+from tensorboardX import SummaryWriter
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from PIL import Image
+
+class LSTMEncoderDecoderAtt(nn.Module):
     def __init__(self, w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01):
-        super(LSTMEncoderDecoder, self).__init__()
+        super(LSTMEncoderDecoderAtt, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
+        self.decoder_hidden_dim = decoder_hidden_dim
+        self.decoder_n_layers = decoder_n_layers
         
         self.encoder = SimpleLSTMEncoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
-        self.decoder = SimpleLSTMDecoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        self.decoder = SimpleLSTMDecoderLayer(len(w2i), embedding_dim, encoder_hidden_dim*2, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
         
-        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), lr=lr)
-        self.decoder_optimizer = torch.optim.Adam(self.decoder.parameters(), lr=lr)
+        self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.attention.parameters()), lr=lr)        
         
         self.w2i = w2i
         self.i2w = i2w
@@ -29,31 +38,67 @@ class LSTMEncoderDecoder(nn.Module):
             print('No GPU available, training on CPU.')
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-    def train(self, train_loader, valid_loader, test_loader, batch_size):            
+        self.writer = SummaryWriter('/work/tmp')
+
+        x = torch.randn(10,10)
+        print(x.size())
+        print(x)
         
-        input = torch.randn(3, 2, 2, requires_grad=True)                
-        print(input)
-        print(input.size())
-        output = input.squeeze(1)
-        print(output)
-        print(output.size())
+        """
+        #fig = plt.figure(figsize=(10,15))
+        fig = plt.figure()
+        #plt.plot(x.numpy())
+        #ax=plt.subplot(111)
+        #sns.heatmap(x.numpy(),ax=ax)
+        sns.heatmap(x.numpy(), cmap="YlGnBu")
         
-        import numpy as np
-        input = torch.tensor(np.array([[1, 2, 3], [4, 5, 6]]))
-        print(input)
-        print(input.size())
-        output = input[:,1]
-        print(output)
-        print(output.size())
-        """ :,n selects the n dimension
-        tensor([[1, 2, 3],
-                [4, 5, 6]])
-        torch.Size([2, 3])
-        tensor([2, 5])
-        torch.Size([2])
+        self.writer.add_figure('matplotlib', fig, global_step=0)
         """
         
-        #return
+        #fig.subplots_adjust(top=0.93)
+        #fig.suptitle('Wine Attributes Correlation Heatmap',                       fontsize=14,                       fontweight='bold')
+        f = self.plot_tensor(x)
+        self.writer.add_figure('asdasdaw', f)
+        
+        #attention_plot = show_attention(x, prediction, source, return_array=True)
+        #attention_plot = self.show_tensor(x.numpy(), return_array=True)
+        #self.writer.add_image('Attention', attention_plot, 0)
+        #self.writer.close()
+    
+    def plot_tensor(self, tensor):
+        plt.clf()
+        fig, (ax) = plt.subplots(1, 1, figsize=(10,6))
+        hm = sns.heatmap(tensor, 
+                         ax=ax,           # Axes in which to draw the plot, otherwise use the currently-active Axes.
+                         cmap="coolwarm", # Color Map.
+                         #square=True,    # If True, set the Axes aspect to “equal” so each cell will be square-shaped.
+                         #annot=True, 
+                         #fmt='.2f',       # String formatting code to use when adding annotations.
+                         #annot_kws={"size": 14},
+                         linewidths=.05)
+        return fig
+
+    
+    def show_tensor(self, x, prediction=None, source=None, return_array=False):
+        plt.figure(figsize=(14, 6))
+        sns.heatmap(x,
+                    #xticklabels=prediction.split(),
+                    #yticklabels=source.split(),
+                    linewidths=.05,
+                    cmap="Blues")
+        #plt.ylabel('Source (German)')
+        #plt.xlabel('Prediction (English)')
+        #plt.xticks(rotation=60)
+        #plt.yticks(rotation=0)
+        if return_array:
+            plt.tight_layout()
+            buff = io.BytesIO()
+            plt.savefig(buff, format='png')
+            buff.seek(0)
+            return np.array(Image.open(buff))   
+            
+            
+    def train(self, train_loader, valid_loader, test_loader, batch_size):                   
         print("\nStart training ...")
        
         criterion = nn.CrossEntropyLoss()
@@ -64,11 +109,12 @@ class LSTMEncoderDecoder(nn.Module):
         counter = 0
         print_every = 100
         clip=5 # gradient clipping
-                
+        unique_counter = 0        
         # move model to GPU, if available
         if(self.train_on_gpu):
             self.encoder.cuda()
             self.decoder.cuda()
+            self.attention.cuda()
 
         # train for some number of epochs
         for e in range(epochs):   
@@ -80,6 +126,8 @@ class LSTMEncoderDecoder(nn.Module):
             counter = 0 
             self.encoder.train()
             self.decoder.train()
+            self.attention.train()
+          
             for x, y in train_loader: 
                 counter += 1    
                 #if counter > 5:
@@ -100,10 +148,10 @@ class LSTMEncoderDecoder(nn.Module):
                 # we'd backprop through the entire training history
                 encoder_hidden = tuple([each.data for each in encoder_hidden])
                 decoder_hidden = tuple([each.data for each in decoder_hidden])
-
+                #print(decoder_hidden[0].size())
+                
                 # zero grads in optimizer
-                self.encoder_optimizer.zero_grad()
-                self.decoder_optimizer.zero_grad()
+                self.optimizer.zero_grad()                
                 
                 # encoder
                 # x is batch_size * max_seq_len_x
@@ -112,17 +160,12 @@ class LSTMEncoderDecoder(nn.Module):
                 # encoder_output is batch_size * max_seq_len_x * encoder_hidden
                 #print(encoder_output.size())
                 
-                # take last state of encoder as context # not necessary when using attention                
-                context = torch.zeros(batch_size, 1, self.encoder_hidden_dim)
-                for j in range(batch_size):
-                    for k in range(max_seq_len_x-1,0,-1):                        
-                        if x[j][k]!=0:
-                            #print("Found at "+str(k))
-                            context[j][0] = encoder_output[j][k]
-                            break
-                
-                # context is last state of the encoder batch_size * encoder_hidden_dim
-                
+                # create first decoder output for initial attention call, extract from decoder_hidden
+                decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
+                # it should look like batch_size x 1 x decoder_hidden_size, so tranform it
+                decoder_output = decoder_output[-1].permute(1,0,2) 
+                #print(decoder_output.size())
+                    
                 loss = 0                 
                 for i in range(max_seq_len_y): # why decoder_hidden is initialized in epoch and not in batch??
                     #print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
@@ -130,9 +173,13 @@ class LSTMEncoderDecoder(nn.Module):
                     # force correct input in next step
                     decoder_input = torch.zeros(batch_size, 1, dtype = torch.long) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
                     for j in range(batch_size):
-                        decoder_input[j]=y[j][i]                        
-                    #print(decoder_input.size())
-                    _, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
+                        decoder_input[j]=y[j][i]                
+                        #print(decoder_input.size())
+      
+                    context = self.attention(encoder_output, decoder_output)
+                    # context is batch_size * encoder_hidden_dim
+                
+                    decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
                     # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
                     word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
                     
@@ -160,19 +207,25 @@ class LSTMEncoderDecoder(nn.Module):
                 
                 # calculate the loss and perform backprop
                 loss.backward()
+                
                 # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
                 nn.utils.clip_grad_norm_(self.encoder.parameters(), clip)
                 nn.utils.clip_grad_norm_(self.decoder.parameters(), clip)
-                self.encoder_optimizer.step()
-                self.decoder_optimizer.step()
+                nn.utils.clip_grad_norm_(self.attention.parameters(), clip)
+                self.optimizer.step()
+                
 
-                print("\t\t\tLoss: {}".format(loss.data.item()))
+                print("\t\t\tLoss: {}".format(loss.data.item()))                
+                self.writer.add_scalar('Train/Loss', loss.data.item(), unique_counter)
+                unique_counter += 1
+
                 #break
                 
             # EVALUATION ####################################################################
             start_time = time.time()
             self.encoder.eval()
             self.decoder.eval()
+            self.attention.eval()            
             encoder_hidden = self.encoder.init_hidden(batch_size)
             decoder_hidden = self.decoder.init_hidden(batch_size)
 
