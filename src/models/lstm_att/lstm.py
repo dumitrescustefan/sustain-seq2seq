@@ -39,63 +39,12 @@ class LSTMEncoderDecoderAtt(nn.Module):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         self.writer = SummaryWriter('/work/tmp')
-
-        x = torch.randn(10,10)
-        print(x.size())
-        print(x)
         
-        """
-        #fig = plt.figure(figsize=(10,15))
-        fig = plt.figure()
-        #plt.plot(x.numpy())
-        #ax=plt.subplot(111)
-        #sns.heatmap(x.numpy(),ax=ax)
-        sns.heatmap(x.numpy(), cmap="YlGnBu")
-        
-        self.writer.add_figure('matplotlib', fig, global_step=0)
-        """
-        
-        #fig.subplots_adjust(top=0.93)
-        #fig.suptitle('Wine Attributes Correlation Heatmap',                       fontsize=14,                       fontweight='bold')
-        f = self.plot_tensor(x)
-        self.writer.add_figure('asdasdaw', f)
-        
-        #attention_plot = show_attention(x, prediction, source, return_array=True)
-        #attention_plot = self.show_tensor(x.numpy(), return_array=True)
-        #self.writer.add_image('Attention', attention_plot, 0)
-        #self.writer.close()
-    
-    def plot_tensor(self, tensor):
-        plt.clf()
-        fig, (ax) = plt.subplots(1, 1, figsize=(10,6))
-        hm = sns.heatmap(tensor, 
-                         ax=ax,           # Axes in which to draw the plot, otherwise use the currently-active Axes.
-                         cmap="coolwarm", # Color Map.
-                         #square=True,    # If True, set the Axes aspect to “equal” so each cell will be square-shaped.
-                         #annot=True, 
-                         #fmt='.2f',       # String formatting code to use when adding annotations.
-                         #annot_kws={"size": 14},
-                         linewidths=.05)
+    def show_tensor(x, prediction=None, source=None):
+        fig = plt.figure(figsize=(12, 6))
+        sns.heatmap(x,cmap="rainbow")
+        plt.tight_layout()        
         return fig
-
-    
-    def show_tensor(self, x, prediction=None, source=None, return_array=False):
-        plt.figure(figsize=(14, 6))
-        sns.heatmap(x,
-                    #xticklabels=prediction.split(),
-                    #yticklabels=source.split(),
-                    linewidths=.05,
-                    cmap="Blues")
-        #plt.ylabel('Source (German)')
-        #plt.xlabel('Prediction (English)')
-        #plt.xticks(rotation=60)
-        #plt.yticks(rotation=0)
-        if return_array:
-            plt.tight_layout()
-            buff = io.BytesIO()
-            plt.savefig(buff, format='png')
-            buff.seek(0)
-            return np.array(Image.open(buff))   
             
             
     def train(self, train_loader, valid_loader, test_loader, batch_size):                   
@@ -130,7 +79,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
           
             for x, y in train_loader: 
                 counter += 1    
-                #if counter > 5:
+                #if counter > 1:
                 #    break                
                 max_seq_len_x = x.size(1)
                 max_seq_len_y = y.size(1)
@@ -252,19 +201,17 @@ class LSTMEncoderDecoderAtt(nn.Module):
                     encoder_hidden = tuple([each.data for each in encoder_hidden])
                     decoder_hidden = tuple([each.data for each in decoder_hidden])
 
+                    # encoder
+                    # x is batch_size * max_seq_len_x
                     encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
                     
                     # encoder_output is batch_size * max_seq_len_x * encoder_hidden
                     #print(encoder_output.size())
                     
-                    # take last state of encoder as context # not necessary when using attention                
-                    context = torch.zeros(batch_size, 1, self.encoder_hidden_dim)
-                    for j in range(batch_size):
-                        for k in range(max_seq_len_x-1,0,-1):                        
-                            if x[j][k]!=0:
-                                #print("Found at "+str(k))
-                                context[j][0] = encoder_output[j][k]
-                                break
+                    # create first decoder output for initial attention call, extract from decoder_hidden
+                    decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
+                    # it should look like batch_size x 1 x decoder_hidden_size, so tranform it
+                    decoder_output = decoder_output[-1].permute(1,0,2) 
                     
                     # context is last state of the encoder batch_size * encoder_hidden_dim                
                     loss = 0             
@@ -276,8 +223,10 @@ class LSTMEncoderDecoderAtt(nn.Module):
                         decoder_input = torch.zeros(batch_size, 1, dtype = torch.long) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
                         for j in range(batch_size):
                             decoder_input[j]=y[j][i]                        
-                        #print(decoder_input.size())
-                        _, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
+                        
+                        context = self.attention(encoder_output, decoder_output)
+                        
+                        decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
                         # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
                         word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
                         if print_example:
@@ -305,7 +254,8 @@ class LSTMEncoderDecoderAtt(nn.Module):
                         print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))
                         print("----- US:")
                         print(" ".join([self.i2w[str(wi)] for wi in example_array]))
-                
+                        self.writer.add_text('EvalText', " ".join([self.i2w[str(wi.data.item())] for wi in y[0]]) + " --vs-- "+" ".join([self.i2w[str(wi)] for wi in example_array]))
+                        
             elapsed_time = time.time() - start_time    
             print("\t Elapsed time: {}".format(elapsed_time))
             

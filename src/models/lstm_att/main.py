@@ -10,7 +10,7 @@ from lstm_att.lstm import LSTMEncoderDecoderAtt
 # loading data
 import loaders.loaders
 data_foler = os.path.join("..","..","train","transformer")
-batch_size = 64
+batch_size = 32
 print("Loading data ...")
 train_loader, valid_loader, test_loader, w2i, i2w = loaders.loaders.prepare_dataloaders(data_foler, batch_size)
 print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
@@ -43,4 +43,4 @@ net = LSTMEncoderDecoderAtt(w2i, i2w, embedding_dim, encoder_hidden_dim, decoder
 print(net)
 
 
-#net.train(train_loader, valid_loader, test_loader, batch_size)
+net.train(train_loader, valid_loader, test_loader, batch_size)
