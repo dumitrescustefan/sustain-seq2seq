@@ -14,6 +14,7 @@ class SimpleLSTMEncoderLayer(nn.Module):
         # embedding and LSTM layers
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
+        self.dropout = nn.Dropout(drop_prob)
      
     def forward(self, x, hidden):        
         batch_size = x.size(0)
@@ -27,7 +28,8 @@ class SimpleLSTMEncoderLayer(nn.Module):
         
         # from documentation, separate directions: the directions can be separated using output.view(seq_len, batch, num_directions, hidden_size), with forward and backward being direction 0 and 1 respectively. 
         # we'll use a larger hidden size in the decoder instead of projecting or summing the fw/bw hidden outputs
-
+        
+        lstm_out = self.dropout(lstm_out)        
         return lstm_out, hidden
     
     
@@ -102,6 +104,10 @@ class AttentionLayer(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         
         self.enc_hidden_dim = enc_hidden_dim
+        
+        self.should_print = False
+        self.att_mat = []
+
     """
     def _attend(self, input_vectors, state):
         w1 = dy.parameter(self.attention_w1)
@@ -151,8 +157,14 @@ class AttentionLayer(nn.Module):
         attention_weights = self.attention_v(w1_w2_sum_tanh)
         #print(attention_weights.size()) # size is batch_size x max_seq_len_x x 1
         
+        
         softmax_attention_weights = self.softmax(attention_weights.squeeze(2)) # squeeze last 1 dimension so we softmax on each of the max_seq_len_x elements (sum to 1)        
         #print(softmax_attention_weights.size()) # size is batch_size x max_seq_len_x
+        
+        if self.should_print:
+            row = softmax_attention_weights[0].data.numpy()            
+            self.att_mat.append(row)
+            #print (len(self.att_mat))
     
         # now, the context is the element-wise sum of each of the encoder_outputs (transformed so far)
         # first, we multiply each encoder_output with its attention value        

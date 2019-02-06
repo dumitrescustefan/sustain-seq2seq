@@ -5,11 +5,18 @@ import torch
 import torch.nn as nn
 
 from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, AttentionLayer
+from progressbar import ProgressBar
 
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
 
 class LSTMEncoderDecoderAtt(nn.Module):
-    def __init__(self, w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5):
+    def __init__(self, w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
         super(LSTMEncoderDecoderAtt, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
@@ -36,7 +43,15 @@ class LSTMEncoderDecoderAtt(nn.Module):
             print('No GPU available, training on CPU.')
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        self.writer = SummaryWriter('/work/tmp')
+        if model_store_path == None:
+            self.model_store_path = os.path.dirname(os.path.realpath(__file__))
+        else:
+            self.model_store_path = model_store_path
+        if not os.path.exists(model_store_path):
+            os.makedirs(model_store_path)
+        #self.writer = SummaryWriter('/work/tmp')
+        
+        
         
     def show_tensor(x, prediction=None, source=None):
         fig = plt.figure(figsize=(12, 6))
@@ -45,21 +60,35 @@ class LSTMEncoderDecoderAtt(nn.Module):
         return fig
             
             
-    def train(self, train_loader, valid_loader, test_loader, batch_size):                   
+    def train(self, train_loader, valid_loader, test_loader, batch_size, patience = 10):                   
         counter = 0        
-        
+        current_patience = patience
         unique_counter = 0        
+        
         # move model to GPU, if available
         if(self.train_on_gpu):
             self.encoder.cuda()
             self.decoder.cuda()
             self.attention.cuda()
-
-        while True:                  
-            loss = self._train_epoch(train_loader, batch_size)            
-            self.save_checkpoint(".", self.epoch)
+        
+        best_loss = 1000000.
+        best_epoch = -1
+        while current_patience > 0:                  
+            current_patience -= 1
+            train_loss = self._train_epoch(train_loader, batch_size)            
+            self.save_checkpoint("last")
             
-            loss = self._eval(valid_loader, batch_size)
+            eval_loss = self._eval(valid_loader, batch_size)
+            if eval_loss < best_loss:
+                current_patience = patience
+                best_loss = eval_loss
+                best_epoch = self.epoch
+                self.save_checkpoint("best")
+                
+            
+            #print()
+            #print("-"*50)
+            print("\nEpoch {} training loss {}, eval loss {}, best loss {} at epoch {}\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
             
             #self.load_checkpoint(".", latest = True)    
             
@@ -71,14 +100,19 @@ class LSTMEncoderDecoderAtt(nn.Module):
         
         encoder_hidden = self.encoder.init_hidden(batch_size)
         decoder_hidden = self.decoder.init_hidden(batch_size)
-
-        for counter, (x, y) in enumerate(train_loader):             
+        total_loss = 0.
+        pbar = ProgressBar()
+        pbar.set(total_steps=len(train_loader)) 
+        
+        for counter, (x, y) in enumerate(train_loader):
+            pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, train average loss \033[93m{:.6f}\033[0m ... ".format(self.epoch, counter, len(train_loader), total_loss/(counter+1)))                         
+                        
             #if counter > 1:
             #    break                
             max_seq_len_x = x.size(1) # x este 64 x 399 (variabil)
             max_seq_len_y = y.size(1) # y este 64 x variabil
             loss = 0
-            print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(train_loader), max_seq_len_x, max_seq_len_y))
+            #print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(train_loader), max_seq_len_x, max_seq_len_y))
             if x.size(0) != batch_size:
                 print("\t Incomplete batch, skipping.")
                 continue
@@ -122,10 +156,19 @@ class LSTMEncoderDecoderAtt(nn.Module):
                     _, decoder_input = word_softmax_projection.max(1) # no need for values, just indexes 
                     decoder_input = decoder_input.unsqueeze(1) # from batch_size to batch_size x 1                    
                     #print(decoder_input.size()) # batch_size x 1                            
-                    
+
+                # remove me, for printing attention
+                if counter == 1:
+                    self.attention.should_print = True
+                    #print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
+                else:
+                    self.attention.should_print = False
+                    self.attention.att_mat = []
                 context = self.attention(encoder_output, decoder_output)
                 # context is batch_size * encoder_hidden_dim
             
+                #if counter == 1:
+                    #input("asd step counter = 1 train")
                 decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
                 # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
                 word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
@@ -138,8 +181,17 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 # target_y now looks like [ 10, 2323, 5739, 24, 9785 ... ] of size 64 (batch_size)
                 #print(word_softmax_projection.size())
                 #print(target_y.size())
-                loss += self.criterion(word_softmax_projection, target_y)   # ignore index not set as we want 0 to count to error too
+                loss += self.criterion(word_softmax_projection, target_y) # ignore index not set as we want 0 to count to error too
             
+            # remove me, attention printing
+            if counter == 1:
+                fig = plt.figure(figsize=(12, 10))
+                sns.heatmap(self.attention.att_mat,cmap="gist_heat")                
+                plt.tight_layout()            
+                fig.savefig('img/__'+str(self.epoch)+'.png')
+                plt.clf()
+                
+            total_loss += loss.data.item()
             loss.backward() # calculate the loss and perform backprop
             
             # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
@@ -148,28 +200,36 @@ class LSTMEncoderDecoderAtt(nn.Module):
             nn.utils.clip_grad_norm_(self.attention.parameters(), self.gradient_clip)
             self.optimizer.step()
             
-            print("\tLoss: {}".format(loss.data.item()))                
-            self.writer.add_scalar('Train/Loss', loss.data.item())            
-            break
+            #print("\tLoss: {}".format(loss.data.item()))                            
+            #self.writer.add_scalar('Train/Loss', loss.data.item())            
+            #break
+        
+        pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(train_loader))) 
 
+        return total_loss/len(train_loader)
+        
     def _eval(self, valid_loader, batch_size):                
-        start_time = time.time()
         self.encoder.eval()
         self.decoder.eval()
         self.attention.eval()            
         encoder_hidden = self.encoder.init_hidden(batch_size)
         decoder_hidden = self.decoder.init_hidden(batch_size)
-
+        
+        pbar = ProgressBar()
+        pbar.set(total_steps=len(valid_loader)) 
+       
         counter = 0 
+        total_loss = 0.
         with torch.no_grad():
-            for counter, (x, y) in enumerate(valid_loader):
-                counter += 1  
-                if counter > 5:
-                    break
+            for counter, (x, y) in enumerate(valid_loader):                
+                #if counter > 5:
+                #    break
+                pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, eval average loss \033[93m{:.6f}\033[0m ... ".format(self.epoch, counter, len(valid_loader), total_loss/(counter+1)))   
+                
                 max_seq_len_x = x.size(1)
                 max_seq_len_y = y.size(1)
                 loss = 0
-                print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(valid_loader), max_seq_len_x, max_seq_len_y))
+                #print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(valid_loader), max_seq_len_x, max_seq_len_y))
                 if x.size(0) != batch_size:
                     print("\t Incomplete batch, skipping.")
                     continue
@@ -181,8 +241,9 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 decoder_hidden = tuple([each.data for each in decoder_hidden])
 
                 encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
-                word_softmax_projection = torch.zeros(batch_size, 3, dtype = torch.float)
-                word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it 
+                word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float)
+                word_softmax_projection[:,3] = 1. # beginning of sentence value is 2, set it 
+                
                 decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
                 decoder_output = decoder_output[-1].permute(1,0,2) 
                                 
@@ -193,8 +254,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 for i in range(max_seq_len_y): # why decoder_hidden is initialized in epoch and not in batch??
                     #print("\t Decoder step {}/{}".format(i, max_seq_len_y))                        
                     _, decoder_input = word_softmax_projection.max(1) # no need for values, just indexes 
-                    decoder_input = decoder_input.unsqueeze(1)                       
-                    
+                    decoder_input = decoder_input.unsqueeze(1)                                           
                     context = self.attention(encoder_output, decoder_output)
                     
                     decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)                    
@@ -205,23 +265,94 @@ class LSTMEncoderDecoderAtt(nn.Module):
                         
                     target_y = y[:,i] # select from y the ith column and shape as an array                    
                     loss += self.criterion(word_softmax_projection, target_y) 
-                    
-                print("\t\t\t Eval Loss: {}".format(loss.data.item()))
+                
+                total_loss += loss.data.item()    
+                
+                #print("\t\t\t Eval Loss: {}".format(loss.data.item()))
                 if print_example:
-                    print_example = False                        
-                    print("----- X:")
-                    print(" ".join([self.i2w[str(wi.data.item())] for wi in x[0]]))                        
-                    print("----- Y:")
-                    print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))
-                    print("----- US:")
-                    print(" ".join([self.i2w[str(wi)] for wi in example_array]))
-                    self.writer.add_text('EvalText', " ".join([self.i2w[str(wi.data.item())] for wi in y[0]]) + " --vs-- "+" ".join([self.i2w[str(wi)] for wi in example_array]))
-                    
-        elapsed_time = time.time() - start_time    
-        print("\t Elapsed time: {}".format(elapsed_time))
+                    print_example = False 
+                    print()                    
+                    #print("\n\n----- X:")
+                    #print(" ".join([self.i2w[str(wi.data.item())] for wi in x[0]]))                                            
+                    #print("----- Y:")
+                    #print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))                    
+                    #print("----- US:")
+                    #print(" ".join([self.i2w[str(wi)] for wi in example_array]))
+                    print(" ".join([str(wi.data.item()) for wi in y[0]]))
+                    print(" ".join([str(wi) for wi in example_array]))
+                    print()
+                    #self.writer.add_text('EvalText', " ".join([self.i2w[str(wi.data.item())] for wi in y[0]]) + " --vs-- "+" ".join([self.i2w[str(wi)] for wi in example_array]), self.epoch)                    
+        
+        pbar.update(text="Epoch {:d}, eval done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(valid_loader))) 
+    
+        return total_loss/len(valid_loader)
+    
+    def run (self, input, max_output_len = 1000): # input is a list of lists of integers (variable len)
+        self.encoder.eval()
+        self.decoder.eval()
+        self.attention.eval()          
+        
+        batch_size = len(input)
+        encoder_hidden = self.encoder.init_hidden(batch_size)
+        decoder_hidden = self.decoder.init_hidden(batch_size)       
             
-    def load_checkpoint(self, filename, latest = True):
-        if latest: # filename is a folder            
+        bordered_input = [ [2]+inst+[3] for inst in input ] # put start and end of sentence markers for each instance
+        max_len = max(len(inst) for inst in bordered_input) # determines max size for all examples 
+
+        input = np.array( [ inst + [0] * (max_len - len(inst)) for inst in bordered_input ] ) # input is now a max_len object padded with zeroes to the right (for all instances)        
+        
+        with torch.no_grad():            
+            # numpy to tensor            
+            x = torch.LongTensor(input)
+            
+            # move it to GPU
+            if(self.train_on_gpu):
+                x = x.cuda()        
+                
+            encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
+            word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float)
+            word_softmax_projection[:,3] = 1. # beginning of sentence value is 2, set it #XXX remember to put 2 instead of 3 for non-dummy 
+            
+            decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) 
+            decoder_output = decoder_output[-1].permute(1,0,2) 
+                            
+            output = [ [] for _ in range(batch_size) ]            
+            for i in range(max_output_len):                
+                _, decoder_input = word_softmax_projection.max(1) # no need for values, just indexes 
+                decoder_input = decoder_input.unsqueeze(1)                                           
+                context = self.attention(encoder_output, decoder_output)
+                
+                decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)                    
+                word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
+                
+                zero_count = 0
+                for j in range(batch_size):
+                    _, mi = word_softmax_projection[j].max(0)                    
+                    output[j].append(mi.item())
+                    if mi.item() == 0:
+                        zero_count += 1
+                
+                # check ending condition (all zeroes)
+                if zero_count == batch_size:
+                    break
+        
+        # transform back to numpy (and move back to CPU just in case it was on GPU)
+        #output = output.numpy()
+        
+        # clean each array
+        clean_output = []
+        for instance in output:
+            clean_instance = []
+            for element in instance:
+                if element > 3:
+                    clean_instance.append(element)
+            clean_output.append(clean_instance)
+        
+        return clean_output
+        
+    
+    def load_checkpoint(self, filename):
+        """if latest: # filename is a folder            
             import glob            
             files = glob.glob(os.path.join(filename,"*.ckp"))
             if files == None:
@@ -229,8 +360,10 @@ class LSTMEncoderDecoderAtt(nn.Module):
             filename = sorted(files)[-1]            
             print("Loading latest model {} ...".format(filename))
         else:
-            print("Loading model {} ...".format(filename))
-        
+           
+        """
+        filename = os.path.join(self.model_store_path,"model."+filename+".ckp")
+        print("Loading model {} ...".format(filename))
         checkpoint = torch.load(filename)        
         self.encoder.load_state_dict(checkpoint["encoder_state_dict"])
         self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
@@ -240,13 +373,14 @@ class LSTMEncoderDecoderAtt(nn.Module):
         self.w2i = checkpoint["w2i"]
         self.teacher_forcing_ratio = checkpoint["teacher_forcing_ratio"]
         self.epoch = checkpoint["epoch"]
-        self.gradient_clip = checkpoint["gradient_clip"]
-        epoch = int(os.path.basename(filename).replace("model.","").replace(".ckp",""))        
-        return epoch
+        self.gradient_clip = checkpoint["gradient_clip"]        
 
-    def save_checkpoint(self, folder_path, epoch):
+    def save_checkpoint(self, filename):
         #print("epoch = %d, loss = %f, time = %f" % (epoch, loss, time))
-        filename = os.path.join(folder_path,"model."+str(epoch).rjust(4,"0")+".ckp")
+        filename = os.path.join(self.model_store_path,"model."+filename+".ckp")
+        #else:
+        #    filename = os.path.join(folder_path,"model."+str(epoch).rjust(4,"0")+".ckp")
+            
         checkpoint = {}
         checkpoint["encoder_state_dict"] = self.encoder.state_dict()
         checkpoint["decoder_state_dict"] = self.decoder.state_dict()
@@ -257,7 +391,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
         checkpoint["teacher_forcing_ratio"] = self.teacher_forcing_ratio
         checkpoint["epoch"] = self.epoch
         checkpoint["gradient_clip"] = self.gradient_clip
-        torch.save(checkpoint, filename)       
+        torch.save(checkpoint, filename)    
 
 """
 x = torch.rand(3,4)
