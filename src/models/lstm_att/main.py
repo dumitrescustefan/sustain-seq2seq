@@ -42,14 +42,15 @@ decoder_drop_prob =0.3
 lr = 0.001
 
 net = LSTMEncoderDecoderAtt(w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr = lr, model_store_path = "../../train/lstm_att")
+
 print(net)
 
-
-
+# train
 net.train(train_loader, valid_loader, test_loader, batch_size)
 
+
+# run
 net.load_checkpoint("best")
 input = [ [4,5,6,7,8,9], [9,8,7,6] ]
-
 output = net.run(input)
 print(output)
