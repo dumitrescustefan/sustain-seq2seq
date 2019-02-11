@@ -4,18 +4,25 @@ import unicodedata
 
 import sentencepiece as spm
 
-def process_tgz(tgz_file, dest_folder, size, spm_model):
+def process_tgz(tgz_file1, tgz_file2, dest_folder, size, spm_model):
     sp = spm.SentencePieceProcessor()
     sp.Load(spm_model)
     if not os.path.exists(dest_folder):
         os.makedirs(dest_folder)
 
-    tar = tarfile.open(tgz_file, 'r')
-    files = tar.getnames()
-    files = [x for x in files if x.endswith(".story")]
-    print("Files in TAR file: "+str(len(files)))
+    tar1 = tarfile.open(tgz_file1, 'r')
+    files1 = tar1.getnames()
+    files1 = [x for x in files1 if x.endswith(".story")]
+    print("Files in TAR file1: "+str(len(files1)))
     print()
 
+    tar2 = tarfile.open(tgz_file2, 'r')
+    files2 = tar2.getnames()
+    files2 = [x for x in files2 if x.endswith(".story")]
+    print("Files in TAR file1: "+str(len(files2)))
+    print()
+    
+    files = files1+files2
     batch = []
     last_i = 0
     for i in range(len(files)):
@@ -23,7 +30,10 @@ def process_tgz(tgz_file, dest_folder, size, spm_model):
             print("{} / {}\t({}) ...".format(i, len(files), i*100.0/float(len(files))))
     
         #f=tar.extractfile("./dailymail/stories/06588a8ab74f068ec61b89de9ca03a28f5ebd6f4.story")
-        f=tar.extractfile(files[i])
+        if i<len(files1):
+            f=tar1.extractfile(files[i])
+        else:
+            f=tar2.extractfile(files[i])
         byte_content=f.readlines()
 
         # convert all byte arrays to strings
@@ -43,14 +53,16 @@ def process_tgz(tgz_file, dest_folder, size, spm_model):
         if len(batch)>=size:
             filename = str(i-size+1)+"-"+str(i)+".json"
             filename = os.path.join(dest_folder, filename)
-            json.dump(batch, open(filename,"w",encoding="utf-8"), indent=4, sort_keys=True)
+            #json.dump(batch, open(filename,"w",encoding="utf-8"), indent=4, sort_keys=True)
+            json.dump(batch, open(filename,"w",encoding="utf-8"))
             batch = []
             last_i = i
         
     if len(batch)>0:
         filename = str(last_i+1)+"-"+str(len(files)-1)+".json"
         filename = os.path.join(dest_folder, filename)            
-        json.dump(batch, open(filename,"w",encoding="utf-8"), indent=4, sort_keys=True)
+        #json.dump(batch, open(filename,"w",encoding="utf-8"), indent=4, sort_keys=True)
+        json.dump(batch, open(filename,"w",encoding="utf-8"))
     
             
 def process_individual_file(content): # content is an array of raw uft-8 strings (all lines)
@@ -135,11 +147,10 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
         
     return x, y
     
-    
-model = os.path.join("bpe_models","cnndm.8K.bpe.model")
-    
-tgz_file = "cnn_stories.tgz"   
-process_tgz(tgz_file, os.path.join("bpe_processed","cnn"), 1000)
+#model_name = "cnndm.1K.bpe.model"   
+model_name = "cnndm.8K.bpe.model"   
+process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed",model_name), 1000, os.path.join("bpe_models", model_name))
 
-tgz_file = "dailymail_stories.tgz"   
-process_tgz(tgz_file, os.path.join("bpe_processed","dm"), 1000)
+model_name = "cnndm.32K.bpe.model"   
+process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed",model_name), 1000, os.path.join("bpe_models", model_name))
+

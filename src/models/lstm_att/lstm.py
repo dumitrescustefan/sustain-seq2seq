@@ -80,7 +80,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 best_epoch = self.epoch
                 self.save_checkpoint("best")
             
-           print("\nEpoch {} training loss {}, eval loss {}, best loss {} at epoch {}\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
+            print("\nEpoch {} training loss {}, eval loss {}, best loss {} at epoch {}\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
             
     def _train_epoch(self, train_loader, batch_size):                       
         self.epoch += 1
@@ -99,6 +99,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                         
             #if counter > 1:
             #    break                
+            
             max_seq_len_x = x.size(1) # x este 64 x 399 (variabil)
             max_seq_len_y = y.size(1) # y este 64 x variabil
             loss = 0
@@ -227,7 +228,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
 
                 encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
                 word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float)
-                word_softmax_projection[:,3] = 1. # beginning of sentence value is 2, set it 
+                word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it  #XXX
                 
                 decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
                 decoder_output = decoder_output[-1].permute(1,0,2) 
@@ -257,12 +258,13 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 if print_example:
                     print_example = False 
                     print()                    
-                    #print("\n\n----- X:")
-                    #print(" ".join([self.i2w[str(wi.data.item())] for wi in x[0]]))                                            
-                    #print("----- Y:")
-                    #print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))                    
-                    #print("----- OUR PREDICTION:")
-                    #print(" ".join([self.i2w[str(wi)] for wi in example_array]))
+                    print("\n\n----- X:")
+                    print(" ".join([self.i2w[str(wi.data.item())] for wi in x[0]]))                                            
+                    print("----- Y:")
+                    print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))                    
+                    print("----- OUR PREDICTION:")
+                    print(" ".join([self.i2w[str(wi)] for wi in example_array]))
+                    print()
                     print(" ".join([str(wi.data.item()) for wi in y[0]]))
                     print(" ".join([str(wi) for wi in example_array]))
                     print()
@@ -296,7 +298,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 
             encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
             word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float)
-            word_softmax_projection[:,3] = 1. # beginning of sentence value is 2, set it #XXX remember to put 2 instead of 3 for non-dummy 
+            word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it #XXX remember to put 2 instead of 3 for non-dummy 
             
             decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) 
             decoder_output = decoder_output[-1].permute(1,0,2) 
