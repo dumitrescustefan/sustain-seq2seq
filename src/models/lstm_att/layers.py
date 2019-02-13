@@ -162,7 +162,8 @@ class AttentionLayer(nn.Module):
         #print(softmax_attention_weights.size()) # size is batch_size x max_seq_len_x
         
         if self.should_print:
-            row = softmax_attention_weights[0].data.numpy()            
+            to_cpu = softmax_attention_weights.cpu()
+            row = to_cpu[0].data.numpy()            
             self.att_mat.append(row)
             #print (len(self.att_mat))
     

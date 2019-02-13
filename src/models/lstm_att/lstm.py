@@ -82,6 +82,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
             
             print("\nEpoch {} training loss {}, eval loss {}, best loss {} at epoch {}\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
             
+            
     def _train_epoch(self, train_loader, batch_size):                       
         self.epoch += 1
         self.encoder.train()
@@ -139,7 +140,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 
                 # teacher forcing (or it is first word which always is start-of-sentence)
                 if random.random()<=self.teacher_forcing_ratio or i==0:
-                    decoder_input = torch.zeros(batch_size, 1, dtype = torch.long) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
+                    decoder_input = torch.zeros(batch_size, 1, dtype = torch.long, device=self.device) # 1 in middle is because lstm expects (batch, seq_len, input_size): 
                     for j in range(batch_size):
                         decoder_input[j]=y[j][i]                
                     #print(decoder_input.size()) # batch_size x 1                            
@@ -227,7 +228,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 decoder_hidden = tuple([each.data for each in decoder_hidden])
 
                 encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
-                word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float)
+                word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float, device=self.device)
                 word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it  #XXX
                 
                 decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
@@ -291,13 +292,12 @@ class LSTMEncoderDecoderAtt(nn.Module):
         with torch.no_grad():            
             # numpy to tensor            
             x = torch.LongTensor(input)
-            
-            # move it to GPU
             if(self.train_on_gpu):
-                x = x.cuda()        
+                x = x.cuda()
+            
                 
             encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
-            word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float)
+            word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float, device=self.device)
             word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it #XXX remember to put 2 instead of 3 for non-dummy 
             
             decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) 
@@ -315,7 +315,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 zero_count = 0
                 for j in range(batch_size):
                     _, mi = word_softmax_projection[j].max(0)                    
-                    output[j].append(mi.item())
+                    output[j].append(mi.cpu().item())
                     if mi.item() == 0:
                         zero_count += 1
                 
@@ -360,6 +360,12 @@ class LSTMEncoderDecoderAtt(nn.Module):
         self.epoch = checkpoint["epoch"]
         self.gradient_clip = checkpoint["gradient_clip"]        
 
+        self.encoder.to(self.device)
+        self.decoder.to(self.device)
+        self.attention.to(self.device)
+        #self.optimizer.to(self.device) # careful to continue training on the same device !
+        
+        
     def save_checkpoint(self, filename):        
         filename = os.path.join(self.model_store_path,"model."+filename+".ckp")
         
