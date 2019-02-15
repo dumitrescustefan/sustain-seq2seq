@@ -1,7 +1,6 @@
 import requests, os, sys, json, string
 import tarfile
 import unicodedata
-from tqdm import tqdm
 
 import sentencepiece as spm
 
@@ -26,11 +25,9 @@ def process_tgz(tgz_file1, tgz_file2, dest_folder, size, spm_model):
     files = files1+files2
     batch = []
     last_i = 0
-    total_bpe = 0
-    total_words = 0
-    for i in tqdm(range(len(files)), unit='files', ncols=120, total=len(files)):       
-        #if i % 1000 == 0:
-        #    print("{} / {}\t({}) ...".format(i, len(files), i*100.0/float(len(files))))
+    for i in range(len(files)):
+        if i % 50 == 0:
+            print("{} / {}\t({}) ...".format(i, len(files), i*100.0/float(len(files))))
     
         #f=tar.extractfile("./dailymail/stories/06588a8ab74f068ec61b89de9ca03a28f5ebd6f4.story")
         if i<len(files1):
@@ -46,14 +43,11 @@ def process_tgz(tgz_file1, tgz_file2, dest_folder, size, spm_model):
         x, y = process_individual_file(content)        
         elem["x"] = []
         elem["y"] = []
-        for line in x:            
+        for line in x:
             elem["x"].append(sp.EncodeAsIds(line))
-            total_words+=len(line.split())
-            total_bpe+=len(elem["x"][-1])
         for line in y:
             elem["y"].append(sp.EncodeAsIds(line))
-            total_words+=len(line.split())
-            total_bpe+=len(elem["y"][-1])
+        
         batch.append(elem)
         
         if len(batch)>=size:
@@ -70,8 +64,7 @@ def process_tgz(tgz_file1, tgz_file2, dest_folder, size, spm_model):
         #json.dump(batch, open(filename,"w",encoding="utf-8"), indent=4, sort_keys=True)
         json.dump(batch, open(filename,"w",encoding="utf-8"))
     
-    print("Total words {}, total bpe {}, average bpe per word: {} at {} word limit.".format(total_words, total_bpe, total_bpe/total_words, limit_words))
-    
+            
 def process_individual_file(content): # content is an array of raw uft-8 strings (all lines)
     # search for "UPDATED:"
     for i in range(len(content)):
@@ -103,6 +96,7 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
     line = content[0].replace(u'\xa0', u' ')
     line = line.replace(u'\u00a320M', u'-')                    
     line = unicodedata.normalize('NFKD', line)#.encode('ascii','ignore')
+    line = line.lower()
     
     x.append(line)
     for i in range(1, len(content)): 
@@ -141,19 +135,6 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
         if y[i][-1] not in string.punctuation:
             y[i] += "."
     
-    # limit sentences in x
-    new_x = []
-    len_new_x = 0
-    i = 0
-    while i<len(x):           
-        len_sentence = len(x[i].split())
-        if len_new_x + len_sentence < limit_words:
-            new_x.append(x[i])
-            len_new_x += len_sentence
-            i+=1
-        else:
-            break
-    
     #print()
     #print(x)
     #print(y)
@@ -165,16 +146,12 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
         print(y)    
         input("ERROR")
         
-    return x, y
-
-limit_words = 400     
-
+    return y, y
+    
 model_name = "cnndm.1K.bpe.model"   
-process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed",model_name), 1000, os.path.join("bpe_models", model_name))
+#model_name = "cnndm.8K.bpe.model"   
+process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed_semi_dummy",model_name), 1000, os.path.join("bpe_models", model_name))
 
-model_name = "cnndm.8K.bpe.model" 
-process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed",model_name), 1000, os.path.join("bpe_models", model_name))
-
-model_name = "cnndm.32K.bpe.model"   
-process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed",model_name), 1000, os.path.join("bpe_models", model_name))
+#model_name = "cnndm.32K.bpe.model"   
+#process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe_processed",model_name), 1000, os.path.join("bpe_models", model_name))
 

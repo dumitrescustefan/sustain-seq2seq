@@ -13,7 +13,7 @@ arg["input_folder"] = os.path.abspath("../../data/bpe_processed/"+bpe_model) # w
 arg["output_folder"] = os.path.abspath("../../data/ready/"+bpe_model) # where to store the vocab dict and indexes
 arg["lowercase"] = True # whether to lowercase or not
 #arg["max_vocab_size"] = 50000 # maximum number of words in the vocab
-arg["max_sequence_len"] = 400 # max length of an instance
+arg["max_sequence_len"] = 100 # max length of an instance
 arg["validation_fraction"] = 0.05 # fraction to use as validation
 arg["test_fraction"] = 0.05 # fraction to test on
 arg["full_data_fraction"] = 0.1 # what fraction from all avaliable data to use (1.0 if you want full dataset)
@@ -100,21 +100,21 @@ for input_file in tqdm(input_files, unit='json files', ncols=120, total=len(inpu
     js_array = json.load(open(input_file,"r"))
     for article in tqdm(js_array, unit='articles', ncols=120, total=len(js_array), desc = "    "):  
         # process x
-        x = [word2index["<s>"]]
+        x = [word2index["<BOS>"]]
         for sentence in article[arg["x_field"]]:            
             if len(x)+len(sentence) < arg["max_sequence_len"]-1:
                 x+=words2ints(sentence)
             else:
                 break
-        x+= [word2index["</s>"]]
+        x+= [word2index["<EOS>"]]
             
         # process y
-        y = [word2index["<s>"]]
+        y = [word2index["<BOS>"]]
         for index, sentence in enumerate(article[arg["y_field"]]):            
             if index>=arg["keep_max_y"]:
                 break            
             y+=words2ints(sentence)            
-        y+= [word2index["</s>"]]
+        y+= [word2index["<EOS>"]]
         
         # compute unk rate
         for i in range(len(x)):
