@@ -7,10 +7,10 @@ import os
 
 arg = {}
 #arg["fresh_start"] = False # set to True to overwrite everything. This will take a while.
-arg["bpe_model"] = "cnndm.8K.bpe.model"
-arg["bpe_model_vocab"] = os.path.abspath("bpe/bpe_models/"+bpe_model).replace(".model",".vocab")
-arg["input_folder"] = os.path.abspath("bpe/bpe_processed/"+bpe_model) # where the cnn and dm folders contain the processed jsons
-arg["output_folder"] = os.path.abspath("bpe/ready/"+bpe_model) # where to store the vocab dict and indexes
+arg["bpe_model"] = "cnndm.1K.bpe.model"
+arg["bpe_model_vocab"] = os.path.abspath("bpe/bpe_models/"+arg["bpe_model"]).replace(".model",".vocab")
+arg["input_folder"] = os.path.abspath("bpe/bpe_processed/"+arg["bpe_model"]) # where the cnn and dm folders contain the processed jsons
+arg["output_folder"] = os.path.abspath("bpe/ready/"+arg["bpe_model"]) # where to store the vocab dict and indexes
 arg["validation_fraction"] = 0.02 # fraction to use as validation
 arg["test_fraction"] = 0.02 # fraction to test on
 arg["full_data_fraction"] = 1. # what fraction from all avaliable data to use (1.0 if you want full dataset)
