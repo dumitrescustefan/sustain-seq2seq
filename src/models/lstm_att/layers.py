@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math 
 
 from pprint import pprint
 
@@ -10,6 +11,7 @@ class SimpleLSTMEncoderLayer(nn.Module):
         self.n_layers = n_layers
         self.hidden_dim = hidden_dim
         self.train_on_gpu=torch.cuda.is_available()
+        self.vocab_size = vocab_size
         
         # embedding and LSTM layers
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
@@ -18,7 +20,7 @@ class SimpleLSTMEncoderLayer(nn.Module):
      
     def forward(self, x, hidden):        
         batch_size = x.size(0)
-        #64 x 399 
+        #64 x 399         
         x = self.embedding(x)
         #64 x 399 x embedding_dim
         
@@ -179,7 +181,20 @@ class AttentionLayer(nn.Module):
         
         return context
         
-       
+class Beam():
+    def __init__(self, alpha = 0.7):#, beam_size):
+        #self.beam_size = beam_size
+        self.past_decoder_hidden = None
+        self.current_decoder_hidden = None
+        self.score = 0.
+        self.sequence = []        
+        self.alpha = alpha
+    
+    def normalized_score(self):
+        return self.score / math.pow(len(self.sequence),self.alpha)
+        
+    def ended(self):
+        return False if self.sequence[-1] != 0 else True
             
 if __name__ == '__main__':
     

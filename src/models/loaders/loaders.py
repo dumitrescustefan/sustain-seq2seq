@@ -17,22 +17,22 @@ BOS_WORD = '<BOS>'
 EOS_WORD = '<EOS>'
 
 
-def prepare_dataloaders(data_folder, batch_size):
+def prepare_dataloaders(data_folder, batch_size, max_seq_len = -1):
     train_loader = torch.utils.data.DataLoader(
-        CNNDMDataset(data_folder, "train"),
+        CNNDMDataset(data_folder, "train", max_seq_len),
         num_workers=1,
         batch_size=batch_size,
         collate_fn=simple_paired_collate_fn,
         shuffle=True)
 
     valid_loader = torch.utils.data.DataLoader(
-         CNNDMDataset(data_folder, "dev"),
+         CNNDMDataset(data_folder, "dev", max_seq_len),
         num_workers=1,
         batch_size=batch_size,
         collate_fn=simple_paired_collate_fn)
     
     test_loader = torch.utils.data.DataLoader(
-         CNNDMDataset(data_folder, "test"),
+         CNNDMDataset(data_folder, "test", max_seq_len),
         num_workers=1,
         batch_size=batch_size,
         collate_fn=simple_paired_collate_fn)
@@ -61,22 +61,22 @@ def simple_collate_fn(insts):
     
     
 #this one returns also the position for x and ys
-def prepare_dataloaders_with_pos(data_folder, batch_size):
+def prepare_dataloaders_with_pos(data_folder, batch_size, max_seq_len):
     train_loader = torch.utils.data.DataLoader(
-        CNNDMDataset(data_folder, "train"),
+        CNNDMDataset(data_folder, "train", max_seq_len),
         num_workers=1,
         batch_size=batch_size,
         collate_fn=paired_collate_fn,
         shuffle=True)
 
     valid_loader = torch.utils.data.DataLoader(
-         CNNDMDataset(data_folder, "dev"),
+         CNNDMDataset(data_folder, "dev", max_seq_len),
         num_workers=1,
         batch_size=batch_size,
         collate_fn=paired_collate_fn)
     
     test_loader = torch.utils.data.DataLoader(
-         CNNDMDataset(data_folder, "test"),
+         CNNDMDataset(data_folder, "test", max_seq_len),
         num_workers=1,
         batch_size=batch_size,
         collate_fn=paired_collate_fn)
@@ -110,11 +110,32 @@ def collate_fn(insts):
     return batch_seq, batch_pos 
     
 class CNNDMDataset(torch.utils.data.Dataset):
-    def __init__(self, root_dir, type = "train"):               
+    def __init__(self, root_dir, type = "train", max_seq_len = -1):               
         self.root_dir = root_dir
 
-        self.X = torch.load(os.path.join(root_dir,type+"_X.pt"))
-        self.y = torch.load(os.path.join(root_dir,type+"_y.pt"))
+        X = torch.load(os.path.join(root_dir,type+"_X.pt"))
+        y = torch.load(os.path.join(root_dir,type+"_y.pt"))
+        
+        self.X = []
+        self.y = []
+        cnt = 0
+        if max_seq_len!=-1:
+            for (sx, sy) in zip(X,y):
+                if len(sx) <= max_seq_len:
+                    #self.X.append([2]*2000) #test max batch size for GPU memory load
+                    self.X.append(sx)
+                    self.y.append(sy)                    
+                    cnt+=1            
+        else:
+            self.X = X
+            self.y = y
+        print("With max_seq_len = {} there are {} out of {} ({}%) sequences left in the {} dataset.".format(max_seq_len, len(self.X), len(X), float(100.*len(self.X)/len(X)), type))
+        
+        assert(len(self.X)==len(self.y))
+        
+        #print(type(self.X[0]))
+        #print("---------------")
+        #self.X = [[1,2,3],[2,3,4]]
         
         self.conf = json.load(open(os.path.join(root_dir,"preprocess_settings.json")))
         self.w2i = json.load(open(os.path.join(root_dir,"word2index.json")))
