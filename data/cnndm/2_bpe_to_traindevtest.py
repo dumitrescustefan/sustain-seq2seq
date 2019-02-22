@@ -8,33 +8,19 @@ import os
 arg = {}
 #arg["fresh_start"] = False # set to True to overwrite everything. This will take a while.
 arg["bpe_model"] = "cnndm.8K.bpe.model"
-arg["bpe_model_vocab"] = os.path.abspath("../../data/bpe_models/"+bpe_model).replace(".model",".vocab")
-arg["input_folder"] = os.path.abspath("../../data/bpe_processed/"+bpe_model) # where the cnn and dm folders contain the processed jsons
-arg["output_folder"] = os.path.abspath("../../data/ready/"+bpe_model) # where to store the vocab dict and indexes
-arg["lowercase"] = True # whether to lowercase or not
-#arg["max_vocab_size"] = 50000 # maximum number of words in the vocab
-arg["max_sequence_len"] = 100 # max length of an instance
-arg["validation_fraction"] = 0.05 # fraction to use as validation
-arg["test_fraction"] = 0.05 # fraction to test on
-arg["full_data_fraction"] = 0.1 # what fraction from all avaliable data to use (1.0 if you want full dataset)
+arg["bpe_model_vocab"] = os.path.abspath("bpe/bpe_models/"+bpe_model).replace(".model",".vocab")
+arg["input_folder"] = os.path.abspath("bpe/bpe_processed/"+bpe_model) # where the cnn and dm folders contain the processed jsons
+arg["output_folder"] = os.path.abspath("bpe/ready/"+bpe_model) # where to store the vocab dict and indexes
+arg["validation_fraction"] = 0.02 # fraction to use as validation
+arg["test_fraction"] = 0.02 # fraction to test on
+arg["full_data_fraction"] = 1. # what fraction from all avaliable data to use (1.0 if you want full dataset)
+arg["reverse_x"] = True
 
 arg["x_field"] = "x"
 arg["y_field"] = "y"
 
 arg["keep_max_y"] = 1 # how many sentences to keep from y (to keep all set y > 5)
 # ######################################
-
-
-def words2ints (words):
-    ints = []
-    for word in words:
-        if arg["lowercase"] == True:
-            word = word.lower() 
-        if word in word2index:
-            ints.append(word2index[word])
-        else:
-            ints.append(word2index["<unk>"])
-    return ints
 
 import os, sys, json, glob, collections
 from tqdm import tqdm
@@ -59,25 +45,25 @@ index2word = {}
 
 index = -1
 
-with open(arg["bpe_model_vocab"],"r",encoding="utf8") as f:
-    index+=1
-    line = f.readline()
-    word = line.split("\t")[0]
-    word2index[word] = index
-    index2word[index] = word
+with open(arg["bpe_model_vocab"],"r",encoding="utf8") as f:    
+    for line in f:
+        index+=1
+        word = line.split("\t")[0]
+        word2index[word] = index
+        index2word[str(index)] = word
 
 # just to be safe, overwrite special markers
 word2index['<PAD>'] = 0
 word2index['<UNK>'] = 1
 word2index['<BOS>'] = 2
 word2index['<EOS>'] = 3
-index2word[0]='<PAD>'
-index2word[1]='<UNK>'
-index2word[2]='<BOS>'
-index2word[3]='<EOS>'
+index2word['0']='<PAD>'
+index2word['1']='<UNK>'
+index2word['2']='<BOS>'
+index2word['3']='<EOS>'
 
-json.dump(word2index, open(os.path.join(arg["output_folder"],"word2index.json"),"w",encoding="utf-8"))
-json.dump(index2word, open(os.path.join(arg["output_folder"],"index2word.json"),"w",encoding="utf-8"))
+json.dump(word2index, open(os.path.join(arg["output_folder"],"word2index.json"),"w",encoding="utf-8"), sort_keys=True)
+json.dump(index2word, open(os.path.join(arg["output_folder"],"index2word.json"),"w",encoding="utf-8"), sort_keys=True)
 
 # create train dev and test files
 print("Creating train dev and test files ...") 
@@ -102,10 +88,15 @@ for input_file in tqdm(input_files, unit='json files', ncols=120, total=len(inpu
         # process x
         x = [word2index["<BOS>"]]
         for sentence in article[arg["x_field"]]:            
-            if len(x)+len(sentence) < arg["max_sequence_len"]-1:
+            """if len(x)+len(sentence) < arg["max_sequence_len"]-1:
                 x+=words2ints(sentence)
             else:
                 break
+            """
+            if arg["reverse_x"]:
+                x+=sentence[::-1]
+            else:
+                x+=sentence            
         x+= [word2index["<EOS>"]]
             
         # process y
@@ -113,7 +104,7 @@ for input_file in tqdm(input_files, unit='json files', ncols=120, total=len(inpu
         for index, sentence in enumerate(article[arg["y_field"]]):            
             if index>=arg["keep_max_y"]:
                 break            
-            y+=words2ints(sentence)            
+            y+=sentence
         y+= [word2index["<EOS>"]]
         
         # compute unk rate
@@ -154,6 +145,3 @@ unk_rate = 100*unks/float(total_len)
 print("\n\nTrain has {} examples, dev has {}, and test has {}, unk rate {} %".format(len(train_X),len(dev_X), len(test_X), unk_rate))
 print("\n\nDone.")
 
-
-
-   

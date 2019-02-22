@@ -128,8 +128,8 @@ print("Done.")
 #print(sentences)
 
 
-process_folder(os.path.join("raw","cnn"), os.path.join("processed","cnn"), 1000, nlp_core)
+process_folder(os.path.join("raw","cnn"), os.path.join("processed","text","cnn"), 1000, nlp_core)
 
-#process_folder(os.path.join("raw","dm"), os.path.join("processed","dm"), 1000, nlp_core)
+process_folder(os.path.join("raw","dm"), os.path.join("processed","text","dm"), 1000, nlp_core)
 
 
