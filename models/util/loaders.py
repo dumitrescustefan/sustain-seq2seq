@@ -110,7 +110,7 @@ def collate_fn(insts):
     return batch_seq, batch_pos 
     
 class CNNDMDataset(torch.utils.data.Dataset):
-    def __init__(self, root_dir, type = "train", max_seq_len = -1):               
+    def __init__(self, root_dir, type = "train", max_seq_len = 100000, min_seq_len = 1):               
         self.root_dir = root_dir
 
         X = torch.load(os.path.join(root_dir,type+"_X.pt"))
@@ -119,17 +119,20 @@ class CNNDMDataset(torch.utils.data.Dataset):
         self.X = []
         self.y = []
         cnt = 0
-        if max_seq_len!=-1:
-            for (sx, sy) in zip(X,y):
-                if len(sx) <= max_seq_len:
-                    #self.X.append([2]*2000) #test max batch size for GPU memory load
-                    self.X.append(sx)
-                    self.y.append(sy)                    
-                    cnt+=1            
-        else:
-            self.X = X
-            self.y = y
-        print("With max_seq_len = {} there are {} out of {} ({}%) sequences left in the {} dataset.".format(max_seq_len, len(self.X), len(X), float(100.*len(self.X)/len(X)), type))
+        zero_size = 0
+        
+        # max len
+        for (sx, sy) in zip(X,y):
+            if len(sx) <= max_seq_len and len(sx) >= min_seq_len+2:
+                #self.X.append([2]*2000) #test max batch size for GPU memory load
+                self.X.append(sx)
+                self.y.append(sy)                    
+                cnt+=1            
+            else: #statistics
+                if len(sx) < min_seq_len+2:
+                    zero_size+=1
+                    
+        print("With max_seq_len = {} there are {} out of {} ({}%) sequences left in the {} dataset (skipped {} with min_seq_len = {}).".format(max_seq_len, len(self.X), len(X), float(100.*len(self.X)/len(X)), type, zero_size, min_seq_len))
         
         assert(len(self.X)==len(self.y))
         

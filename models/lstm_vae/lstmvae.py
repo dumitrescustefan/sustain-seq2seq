@@ -5,20 +5,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, AttentionLayer
-from progressbar import ProgressBar
-
-#from tensorboardX import SummaryWriter
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
+from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, VAE
 import numpy as np
 
+# Append parent dir to sys path.
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.sys.path.insert(0, parentdir)
+from util.progressbar import ProgressBar
+from util.log import Log
 
-class LSTMEncoderDecoderAtt(nn.Module):
+
+
+
+class LSTMVAE(nn.Module):
     def __init__(self, w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
-        super(LSTMEncoderDecoderAtt, self).__init__()
+        super(LSTMVAE, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
         self.decoder_hidden_dim = decoder_hidden_dim
@@ -27,11 +28,13 @@ class LSTMEncoderDecoderAtt(nn.Module):
         self.gradient_clip = gradient_clip
         
         self.encoder = SimpleLSTMEncoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
-        self.decoder = SimpleLSTMDecoderLayer(len(w2i), embedding_dim, encoder_hidden_dim*2, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
-        self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
+        self.decoder = SimpleLSTMDecoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        #self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
+        self.vae = VAE(encoder_hidden_dim*2, encoder_hidden_dim)
         
-        self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.attention.parameters()), lr=lr)        
-        self.criterion = nn.CrossEntropyLoss(ignore_index=0)
+        
+        self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.vae.parameters()), lr=lr)        
+        self.criterion = nn.CrossEntropyLoss(ignore_index = 0)
         
         self.w2i = w2i
         self.i2w = i2w
@@ -53,13 +56,16 @@ class LSTMEncoderDecoderAtt(nn.Module):
             self.model_store_path = model_store_path
         if not os.path.exists(model_store_path):
             os.makedirs(model_store_path)
-        #self.writer = SummaryWriter('/work/tmp')        
-        
-    def show_tensor(x, prediction=None, source=None): # x is a numpy 2d matrix
-        fig = plt.figure(figsize=(12, 6))
-        sns.heatmap(x,cmap="rainbow")
-        plt.tight_layout()        
-        return fig            
+            
+        self.log_path = os.path.join(self.model_store_path,"log")
+        self.log = Log(self.log_path, clear=True)
+        """
+        import math
+        for i in range(100):
+            self.log.var("kl_loss",i,math.sin(i/20))
+            self.log.text("train = {}".format(math.sin(i/20)))
+        self.log.draw()
+        """
             
     def train(self, train_loader, valid_loader, test_loader, batch_size, patience = 10):                           
         current_patience = patience
@@ -74,7 +80,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
         best_epoch = -1
         while current_patience > 0:                  
             current_patience -= 1
-            train_loss = self._train_epoch(train_loader, batch_size)            
+            train_loss = self._train_epoch(train_loader)            
             self.save_checkpoint("last")
             
             eval_loss = self._eval(valid_loader, batch_size)
@@ -84,47 +90,46 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 best_epoch = self.epoch
                 self.save_checkpoint("best")
             
-            print("\nEpoch {} training loss {}, eval loss {}, best loss {} at epoch {}\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
+            print("\nEpoch \033[93m{:d}\033[0m training loss \033[93m{:.6f}\033[0m, eval loss \033[93m{:.6f}\033[0m, best loss \033[93m{:.6f}\033[0m at epoch \033[93m{:d}\033[0m\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
             
             
-    def _train_epoch(self, train_loader, batch_size):                       
+    def _train_epoch(self, train_loader):                       
         self.epoch += 1
         self.encoder.train()
         self.decoder.train()
-        self.attention.train()        
+        self.vae.train()        
         
-        encoder_hidden = self.encoder.init_hidden(batch_size)
-        decoder_hidden = self.decoder.init_hidden(batch_size)
+        #encoder_hidden = self.encoder.init_hidden(batch_size)
+        #decoder_hidden = self.decoder.init_hidden(batch_size)
         total_loss = 0.
         pbar = ProgressBar()
         pbar.set(total_steps=len(train_loader)) 
         
         for counter, (x, y) in enumerate(train_loader):
+            batch_size = x.size(0)
             max_seq_len_x = x.size(1) # x este 64 x 399 (variabil)
             max_seq_len_y = y.size(1) # y este 64 x variabil
             
-            pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, train average loss \033[93m{:.6f}\033[0m (mx/my = {}/{}) ... ".format(self.epoch, counter, len(train_loader), total_loss/(counter+1), max_seq_len_x, max_seq_len_y))                         
+            pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, train average loss \033[93m{:.6f}\033[0m (bs/mx/my = {}/{}/{}) ... ".format(self.epoch, counter, len(train_loader), total_loss/(counter+1), batch_size, max_seq_len_x, max_seq_len_y))                         
                         
             #if counter > 1:               
             #    break                
             if counter % 1000 == 0 and counter > 0:
                 self.save_checkpoint("last")
             
-            
-            loss = 0
-            #print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(train_loader), max_seq_len_x, max_seq_len_y))
+            loss = 0   
+            """            
             if x.size(0) != batch_size:
                 print("\t Incomplete batch, skipping.")
                 continue
+            """
             # print(x.size()) # x is a 64 * 399 tensor (batch*max_seq_len_x)               
 
             if(self.train_on_gpu):
                 x, y = x.cuda(), y.cuda()
-            
-            # Creating new variables for the hidden state, otherwise
-            # we'd backprop through the entire training history
-            encoder_hidden = tuple([each.data for each in encoder_hidden])
-            decoder_hidden = tuple([each.data for each in decoder_hidden])
+
+            encoder_hidden = self.encoder.init_hidden(batch_size)
+            decoder_hidden = self.decoder.init_hidden(batch_size)        
             #print(decoder_hidden[0].size())
             
             # zero grads in optimizer
@@ -133,8 +138,17 @@ class LSTMEncoderDecoderAtt(nn.Module):
             # encoder
             # x is batch_size x max_seq_len_x            
             encoder_output, encoder_hidden = self.encoder(x, encoder_hidden)             
-            # encoder_output is batch_size x max_seq_len_x x encoder_hidden
-            #print(encoder_output.size())
+            # encoder_output is batch_size x max_seq_len_x x encoder_hidden (where encoder_hidden is double because it is bidirectional)
+            # print(encoder_output.size())
+            
+            # take last state of encoder as encoder_last_output # not necessary when using attention                
+            encoder_last_output = torch.zeros(batch_size, self.encoder_hidden_dim*2, device=self.device) # was with ,1, in middle ?
+            for j in range(batch_size):
+                encoder_last_output[j] = encoder_output[j][-1]
+            # encoder_last_output is last state of the encoder batch_size * encoder_hidden_dim
+        
+            # VAE
+            z, mu, logvar = self.vae(encoder_last_output) # all are (batch_size, encoder_hidden_dim)
             
             # create first decoder output for initial attention call, extract from decoder_hidden
             decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
@@ -143,7 +157,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
             #print(decoder_output.size())
                 
             loss = 0                 
-            for i in range(max_seq_len_y): # why decoder_hidden is initialized in epoch and not in batch??
+            for i in range(max_seq_len_y): 
                 #print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
                 
                 # teacher forcing (or it is first word which always is start-of-sentence)
@@ -157,17 +171,9 @@ class LSTMEncoderDecoderAtt(nn.Module):
                     decoder_input = decoder_input.unsqueeze(1) # from batch_size to batch_size x 1                    
                     #print(decoder_input.size()) # batch_size x 1                            
 
-                # remove me, for printing attention
-                if counter == 1:
-                    self.attention.should_print = False#True
-                    #print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
-                else:
-                    self.attention.should_print = False
-                    self.attention.att_mat = []
-                context = self.attention(encoder_output, decoder_output)
                 
-                # context is batch_size * encoder_hidden_dim            
-                decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
+                # z context is batch_size * encoder_hidden_dim            
+                decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, z)
                 # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
                 word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
                 
@@ -177,36 +183,41 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 # target_y now looks like [ 10, 2323, 5739, 24, 9785 ... ] of size 64 (batch_size)
                 #print(word_softmax_projection.size())
                 #print(target_y.size())
-                loss += self.criterion(word_softmax_projection, target_y) # ignore index not set as we want 0 to count to error too
+                loss += self.criterion(word_softmax_projection, target_y)
             
-            # remove me, attention printing
-            """if counter == 1:
-                fig = plt.figure(figsize=(12, 10))
-                sns.heatmap(self.attention.att_mat,cmap="gist_heat")                
-                plt.tight_layout()            
-                fig.savefig('img/__'+str(self.epoch)+'.png')
-                plt.clf()
-            """    
-            total_loss += loss.data.item()
+            global_step = (self.epoch-1)*len(train_loader)+counter   
+            print("epoch {}, counter {}, global_step {}".format(self.epoch, counter, global_step))        
+            self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, loss.data.item() ,y_index=1)
+            KL_weight = self.vae.kl_anneal_function(global_step)
+            self.log.var("KL weight", global_step, KL_weight, y_index=0)
+            KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            KLD *= KL_weight
+            self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, KLD.data.item() ,y_index=2)
+            
+            loss += KLD
+            self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, loss.data.item() ,y_index=0)
+                        
+            total_loss += loss.data.item() / batch_size
             loss.backward() # calculate the loss and perform backprop
             
             # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
             nn.utils.clip_grad_norm_(self.encoder.parameters(), self.gradient_clip)
             nn.utils.clip_grad_norm_(self.decoder.parameters(), self.gradient_clip)
-            nn.utils.clip_grad_norm_(self.attention.parameters(), self.gradient_clip)
+            nn.utils.clip_grad_norm_(self.vae.parameters(), self.gradient_clip)
             self.optimizer.step()
             
             #self.writer.add_scalar('Train/Loss', loss.data.item())            
             #break
         
         pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(train_loader))) 
-
+        self.log.draw()
+        
         return total_loss/len(train_loader)
     
     def run (self, data_loader, batch_size, beam_size=3): #data is either a list of lists or a dataset_loader
         self.encoder.eval()
         self.decoder.eval()
-        self.attention.eval()            
+        self.vae.eval()            
         
         pbar = ProgressBar()
         pbar.set(total_steps=len(data_loader)) 
@@ -399,9 +410,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
     def _eval(self, valid_loader, batch_size):                
         self.encoder.eval()
         self.decoder.eval()
-        self.attention.eval()            
-        encoder_hidden = self.encoder.init_hidden(batch_size)
-        decoder_hidden = self.decoder.init_hidden(batch_size)
+        self.vae.eval()            
         
         pbar = ProgressBar()
         pbar.set(total_steps=len(valid_loader)) 
@@ -413,7 +422,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 #if counter > 5:
                 #    break
                 pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, eval average loss \033[93m{:.6f}\033[0m ... ".format(self.epoch, counter, len(valid_loader), total_loss/(counter+1)))   
-                
+                batch_size = x.size(0)
                 max_seq_len_x = x.size(1)
                 max_seq_len_y = y.size(1)
                 loss = 0
@@ -425,10 +434,17 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 if(self.train_on_gpu):
                     x, y = x.cuda(), y.cuda()
                 
-                encoder_hidden = tuple([each.data for each in encoder_hidden])
-                decoder_hidden = tuple([each.data for each in decoder_hidden])
-
-                encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
+                encoder_hidden = self.encoder.init_hidden(batch_size)
+                decoder_hidden = self.decoder.init_hidden(batch_size)
+        
+                encoder_output, encoder_hidden = self.encoder(x, encoder_hidden)                 
+                encoder_last_output = torch.zeros(batch_size, self.encoder_hidden_dim*2, device=self.device)
+                for j in range(batch_size):
+                    encoder_last_output[j] = encoder_output[j][-1]
+                
+                # VAE
+                z, mu, logvar = self.vae(encoder_last_output)
+                
                 word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float, device=self.device)
                 word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it  #XXX
                 
@@ -442,10 +458,9 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 for i in range(max_seq_len_y): 
                     #print("\t Decoder step {}/{}".format(i, max_seq_len_y))                        
                     _, decoder_input = word_softmax_projection.max(1) # no need for values, just indexes 
-                    decoder_input = decoder_input.unsqueeze(1)                                           
-                    context = self.attention(encoder_output, decoder_output)
+                    decoder_input = decoder_input.unsqueeze(1)          
                     
-                    decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)                    
+                    decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, z)                    
                     word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
                     if print_example:                        
                         _, mi = word_softmax_projection[0].max(0)
@@ -454,6 +469,10 @@ class LSTMEncoderDecoderAtt(nn.Module):
                     target_y = y[:,i] # select from y the ith column and shape as an array                    
                     loss += self.criterion(word_softmax_projection, target_y) 
                 
+                loss /= batch_size
+                KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+                loss += KLD            
+                
                 total_loss += loss.data.item()    
                 
                 #print("\t\t\t Eval Loss: {}".format(loss.data.item()))
@@ -461,7 +480,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                     print_example = False 
                     print()                    
                     print("\n\n----- X:")
-                    print("".join([self.i2w[str(wi.data.item())] for wi in x[0] if str(wi.data.item())!="0"]))                                            
+                    print(" ".join([self.i2w[str(wi.data.item())] for wi in x[0]]))                                            
                     print("----- Y:")
                     print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))                    
                     print("----- OUR PREDICTION:")
@@ -553,7 +572,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
         checkpoint = torch.load(filename)        
         self.encoder.load_state_dict(checkpoint["encoder_state_dict"])
         self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
-        self.attention.load_state_dict(checkpoint["attention_state_dict"])
+        self.vae.load_state_dict(checkpoint["vae_state_dict"])
         #self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.w2i = checkpoint["w2i"]
         self.i2w = checkpoint["i2w"]
@@ -580,7 +599,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
         checkpoint = {}
         checkpoint["encoder_state_dict"] = self.encoder.state_dict()
         checkpoint["decoder_state_dict"] = self.decoder.state_dict()
-        checkpoint["attention_state_dict"] = self.attention.state_dict()
+        checkpoint["vae_state_dict"] = self.vae.state_dict()
         checkpoint["optimizer_state_dict"] = self.optimizer.state_dict()
         checkpoint["w2i"] = self.w2i
         checkpoint["i2w"] = self.i2w

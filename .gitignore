@@ -3,6 +3,8 @@
 *.story
 *.pt
 
+train/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

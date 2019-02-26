@@ -32,7 +32,7 @@ print(arg)
 
 # create output folder
 if not os.path.exists(arg["output_folder"]):
-        os.makedirs(arg["output_folder"])
+    os.makedirs(arg["output_folder"])
 
 # list all input files
 input_files = glob.glob(os.path.join(arg["input_folder"],"*.json"))
