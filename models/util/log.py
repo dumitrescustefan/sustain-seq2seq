@@ -75,47 +75,57 @@ class Log():
                 txt = "\n"
             f.write(txt)
         
-    def draw(self):
-        if not os.path.exists(self._json_file):
-            print("Warning, nothing to draw (no json file found!).")
-            return False
+    def draw(self, last_quarter=False):
+        try:        
+            if not os.path.exists(self._json_file):
+                print("Warning, nothing to draw (no json file found!).")
+                return False
+                
+            with open(self._json_file, "r", encoding="utf-8") as f:
+                js = json.load(f)
             
-        with open(self._json_file, "r", encoding="utf-8") as f:
-            js = json.load(f)
-        
-        for name in js:
-            # skip legend info
-            if "_legend" in name:
-                continue 
-            
-            # determine how many y_indexes are to plot
-            max_y_index = 0
-            for x,y,y_index in js[name]:
-                if y_index > max_y_index:
-                    max_y_index = y_index
-            
-            # for each dimension
-            plt.clf()   
-            plt.figure(figsize=(12,10))
-            plt.tight_layout()
-            plt.title(name)
-            
-            for current_y_index in range(max_y_index+1):                
-                plt_x = []
-                plt_y = []            
+            for name in js:
+                # skip legend info
+                if "_legend" in name:
+                    continue 
+                
+                # determine how many y_indexes are to plot
+                max_y_index = 0
                 for x,y,y_index in js[name]:
-                    if y_index == current_y_index:
-                        plt_x.append(x)
-                        plt_y.append(y)            
-                plt.plot(plt_x, plt_y, alpha=0.6, label=js[name+"_legend"][current_y_index])
-            
-            ax = plt.gca()
-            ax.grid(which='major', axis='both', linestyle='--')
-            plt.legend(loc='upper left', frameon=False)
-            plt.savefig(os.path.join(self.folder, name+".png"), bbox_inches='tight')
-            
-        return True
-    
+                    if y_index > max_y_index:
+                        max_y_index = y_index
+                
+                # for each dimension
+                plt.clf()   
+                plt.figure(figsize=(12,10))
+                plt.tight_layout()
+                plt.title(name + ("" if not last_quarter else " (Last quarter)"))
+                
+                for current_y_index in range(max_y_index+1):                
+                    plt_x = []
+                    plt_y = []            
+                    for x,y,y_index in js[name]:
+                        if y_index == current_y_index:
+                            plt_x.append(x)
+                            plt_y.append(y)            
+                    if last_quarter:
+                        l = len(plt_x)
+                        plt_x = plt_x[l-int(l/4):]
+                        plt_y = plt_y[l-int(l/4):]
+                    plt.plot(plt_x, plt_y, alpha=0.6, label=js[name+"_legend"][current_y_index])
+                
+                ax = plt.gca()
+                ax.grid(which='major', axis='both', linestyle='--')
+                plt.legend(loc='upper left', frameon=False)
+                if last_quarter:
+                    filename = name+"-quarter.png"
+                else:
+                    filename = name+".png"
+                plt.savefig(os.path.join(self.folder, filename), bbox_inches='tight')
+                plt.close()                
+            return True            
+        except:
+            return False
         
     def _modifyme___show_tensor(x, prediction=None, source=None): # x is a numpy 2d matrix
         fig = plt.figure(figsize=(12, 6))

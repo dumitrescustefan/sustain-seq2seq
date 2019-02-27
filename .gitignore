@@ -4,6 +4,9 @@
 *.pt
 
 train/
+data/roen/raw
+data/roen/ready/
+data/roen/bpe_models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

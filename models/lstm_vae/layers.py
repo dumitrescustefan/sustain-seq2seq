@@ -61,7 +61,7 @@ class SimpleLSTMDecoderLayer(nn.Module):
         self.n_layers = n_layers
         self.train_on_gpu=torch.cuda.is_available()
         
-        self.embedding = nn.Embedding(vocab_size, embedding_dim) # I should not have 2 embedding layers. maybe move in top class and work with embeddings only
+        self.embedding = nn.Embedding(vocab_size, embedding_dim) 
         self.lstm = nn.LSTM(self.input_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True)
         self.softmax_projection = nn.Linear(hidden_dim, vocab_size)
     
@@ -123,7 +123,7 @@ class VAE(nn.Module):
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return BCE + KLD
     
-    def kl_anneal_function(self, step, k=0.0025, x0=2500, anneal_function="logistic"):
+    def kl_anneal_function(self, step, k=0.0025, x0=2500, anneal_function="linear"):
         if anneal_function == 'logistic':
             return float(1/(1+np.exp(-k*(step-x0))))
         elif anneal_function == 'linear':

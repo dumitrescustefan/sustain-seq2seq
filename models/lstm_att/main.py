@@ -8,20 +8,21 @@ import torch.nn as nn
 from lstm_att.lstm import LSTMEncoderDecoderAtt
 
 # loading data
-import loaders.loaders
-#import loaders.dummyloaders
-data_folder = os.path.join("..","..","data","ready","cnndm.8K.bpe.model")
-#data_folder = os.path.join("..","..","data","ready_semi_dummy","cnndm.1K.bpe.model")
-#batch_size = 16 #64
-batch_size = 8
+#import util.loaders
+import util.biloaders
+
+#data_folder = os.path.join("..","..","data","cnndm","bpe","ready","cnndm.8K.bpe.model")
+data_folder = os.path.join("..","..","data","roen","ready","setimes.8K.bpe")
+
+batch_size = 32
 print("Loading data ...")
-train_loader, valid_loader, test_loader, w2i, i2w = loaders.loaders.prepare_dataloaders(data_folder, batch_size, 1500)
-#train_loader, valid_loader, test_loader, w2i, i2w = loaders.dummyloaders.prepare_dataloaders(data_folder, batch_size)
+#train_loader, valid_loader, test_loader, w2i, i2w = util.loaders.prepare_dataloaders(data_folder, batch_size, 1000, 5)
+train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = util.biloaders.prepare_dataloaders(data_folder, batch_size, 1000, 5)
 print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
     len(train_loader.dataset.X),
     len(valid_loader.dataset.X),
     len(test_loader.dataset.X),
-    len(w2i)))
+    len(src_w2i)))
 
 
 # x and y start with BOS (2), end with EOS(3), are padded with PAD (0) and unknown words are UNK (1)
@@ -44,7 +45,7 @@ encoder_drop_prob = 0.3
 decoder_drop_prob = 0.3
 lr = 0.0005
 
-net = LSTMEncoderDecoderAtt(w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr = lr, model_store_path = "../../train/lstm_att")
+net = LSTMEncoderDecoderAtt(src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr = lr, model_store_path = "../../train/lstm_att")
 
 print(net)
 
@@ -54,8 +55,8 @@ net.train(train_loader, valid_loader, test_loader, batch_size, patience = 20)
 
 
 # run
-net.load_checkpoint("best")
+#net.load_checkpoint("best")
 #input = [ [4,5,6,7,8,9], [9,8,7,6] ]
 #output = net.run(input)
-output = net.run(valid_loader, batch_size)
-print(output)
+#output = net.run(valid_loader, batch_size)
+#print(output)

@@ -6,7 +6,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, AttentionLayer
-from progressbar import ProgressBar
+
+# Append parent dir to sys path.
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.sys.path.insert(0, parentdir)
+from util.progressbar import ProgressBar
+from util.log import Log
 
 #from tensorboardX import SummaryWriter
 import matplotlib
@@ -17,7 +22,7 @@ import numpy as np
 
 
 class LSTMEncoderDecoderAtt(nn.Module):
-    def __init__(self, w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
+    def __init__(self, src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
         super(LSTMEncoderDecoderAtt, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
@@ -26,19 +31,23 @@ class LSTMEncoderDecoderAtt(nn.Module):
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.gradient_clip = gradient_clip
         
-        self.encoder = SimpleLSTMEncoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
-        self.decoder = SimpleLSTMDecoderLayer(len(w2i), embedding_dim, encoder_hidden_dim*2, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        self.encoder = SimpleLSTMEncoderLayer(len(src_w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
+        self.decoder = SimpleLSTMDecoderLayer(len(tgt_w2i), embedding_dim, encoder_hidden_dim*2, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
         self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
         
         self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.attention.parameters()), lr=lr)        
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)
         
-        self.w2i = w2i
-        self.i2w = i2w
+        self.src_w2i = src_w2i        
+        self.src_i2w = src_i2w
+        self.tgt_w2i = tgt_w2i
+        self.tgt_i2w = tgt_i2w
         self.epoch = 0
         self.lr = lr
-        self.vocab_size = len(w2i)
-        print("Vocab size: {}".format(self.vocab_size))
+        self.src_vocab_size = len(src_w2i)
+        self.tgt_vocab_size = len(tgt_w2i)
+        print("Source vocab size: {}".format(self.src_vocab_size))
+        print("Target vocab size: {}".format(self.tgt_vocab_size))
         
         self.train_on_gpu=torch.cuda.is_available()        
         if(self.train_on_gpu):
@@ -53,7 +62,10 @@ class LSTMEncoderDecoderAtt(nn.Module):
             self.model_store_path = model_store_path
         if not os.path.exists(model_store_path):
             os.makedirs(model_store_path)
-        #self.writer = SummaryWriter('/work/tmp')        
+            
+        self.log_path = os.path.join(self.model_store_path,"log")
+        self.log = Log(self.log_path, clear=True)
+       
         
     def show_tensor(x, prediction=None, source=None): # x is a numpy 2d matrix
         fig = plt.figure(figsize=(12, 6))
@@ -74,34 +86,34 @@ class LSTMEncoderDecoderAtt(nn.Module):
         best_epoch = -1
         while current_patience > 0:                  
             current_patience -= 1
-            train_loss = self._train_epoch(train_loader, batch_size)            
+            train_loss = self._train_epoch(train_loader)            
             self.save_checkpoint("last")
             
-            eval_loss = self._eval(valid_loader, batch_size)
+            eval_loss = self._eval(valid_loader)
             if eval_loss < best_loss:
                 current_patience = patience
                 best_loss = eval_loss
                 best_epoch = self.epoch
                 self.save_checkpoint("best")
             
-            print("\nEpoch {} training loss {}, eval loss {}, best loss {} at epoch {}\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
+            print("\nEpoch \033[93m{:d}\033[0m training loss \033[93m{:.6f}\033[0m, eval loss \033[93m{:.6f}\033[0m, best loss \033[93m{:.6f}\033[0m at epoch \033[93m{:d}\033[0m\n".format(self.epoch, train_loss, eval_loss, best_loss, best_epoch))
             
             
-    def _train_epoch(self, train_loader, batch_size):                       
+    def _train_epoch(self, train_loader):                       
         self.epoch += 1
         self.encoder.train()
         self.decoder.train()
         self.attention.train()        
         
-        encoder_hidden = self.encoder.init_hidden(batch_size)
-        decoder_hidden = self.decoder.init_hidden(batch_size)
         total_loss = 0.
         pbar = ProgressBar()
         pbar.set(total_steps=len(train_loader)) 
         
         for counter, (x, y) in enumerate(train_loader):
+            batch_size = x.size(0)
             max_seq_len_x = x.size(1) # x este 64 x 399 (variabil)
             max_seq_len_y = y.size(1) # y este 64 x variabil
+
             
             pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, train average loss \033[93m{:.6f}\033[0m (mx/my = {}/{}) ... ".format(self.epoch, counter, len(train_loader), total_loss/(counter+1), max_seq_len_x, max_seq_len_y))                         
                         
@@ -111,20 +123,14 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 self.save_checkpoint("last")
             
             
-            loss = 0
-            #print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(train_loader), max_seq_len_x, max_seq_len_y))
-            if x.size(0) != batch_size:
-                print("\t Incomplete batch, skipping.")
-                continue
+            loss = 0            
             # print(x.size()) # x is a 64 * 399 tensor (batch*max_seq_len_x)               
 
             if(self.train_on_gpu):
                 x, y = x.cuda(), y.cuda()
             
-            # Creating new variables for the hidden state, otherwise
-            # we'd backprop through the entire training history
-            encoder_hidden = tuple([each.data for each in encoder_hidden])
-            decoder_hidden = tuple([each.data for each in decoder_hidden])
+            encoder_hidden = self.encoder.init_hidden(batch_size)
+            decoder_hidden = self.decoder.init_hidden(batch_size)
             #print(decoder_hidden[0].size())
             
             # zero grads in optimizer
@@ -187,7 +193,7 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 fig.savefig('img/__'+str(self.epoch)+'.png')
                 plt.clf()
             """    
-            total_loss += loss.data.item()
+            total_loss += loss.data.item()/batch_size
             loss.backward() # calculate the loss and perform backprop
             
             # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
@@ -195,13 +201,14 @@ class LSTMEncoderDecoderAtt(nn.Module):
             nn.utils.clip_grad_norm_(self.decoder.parameters(), self.gradient_clip)
             nn.utils.clip_grad_norm_(self.attention.parameters(), self.gradient_clip)
             self.optimizer.step()
+            # end batch
             
-            #self.writer.add_scalar('Train/Loss', loss.data.item())            
-            #break
+        # end current epoch
+        pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss)) 
+        self.log.var("Loss|Train loss|Validation loss", self.epoch, total_loss, y_index=0)
+        self.log.draw()
         
-        pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(train_loader))) 
-
-        return total_loss/len(train_loader)
+        return total_loss
     
     def run (self, data_loader, batch_size, beam_size=3): #data is either a list of lists or a dataset_loader
         self.encoder.eval()
@@ -396,13 +403,11 @@ class LSTMEncoderDecoderAtt(nn.Module):
         total_loss += loss.data.item()  
         return [], total_loss
         
-    def _eval(self, valid_loader, batch_size):                
+    def _eval(self, valid_loader):                
         self.encoder.eval()
         self.decoder.eval()
         self.attention.eval()            
-        encoder_hidden = self.encoder.init_hidden(batch_size)
-        decoder_hidden = self.decoder.init_hidden(batch_size)
-        
+         
         pbar = ProgressBar()
         pbar.set(total_steps=len(valid_loader)) 
        
@@ -414,20 +419,18 @@ class LSTMEncoderDecoderAtt(nn.Module):
                 #    break
                 pbar.update(progress=counter, text="Epoch {:d}, progress {}/{}, eval average loss \033[93m{:.6f}\033[0m ... ".format(self.epoch, counter, len(valid_loader), total_loss/(counter+1)))   
                 
+                batch_size = x.size(0)
                 max_seq_len_x = x.size(1)
                 max_seq_len_y = y.size(1)
+
                 loss = 0
-                #print("  Epoch {}, batch: {}/{}, max_seq_len_x: {}, max_seq_len_y: {}".format(self.epoch, counter, len(valid_loader), max_seq_len_x, max_seq_len_y))
-                if x.size(0) != batch_size:
-                    print("\t Incomplete batch, skipping.")
-                    continue
-                
+                                
                 if(self.train_on_gpu):
                     x, y = x.cuda(), y.cuda()
                 
-                encoder_hidden = tuple([each.data for each in encoder_hidden])
-                decoder_hidden = tuple([each.data for each in decoder_hidden])
-
+                encoder_hidden = self.encoder.init_hidden(batch_size)
+                decoder_hidden = self.decoder.init_hidden(batch_size)
+       
                 encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
                 word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float, device=self.device)
                 word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it  #XXX
@@ -454,23 +457,25 @@ class LSTMEncoderDecoderAtt(nn.Module):
                     target_y = y[:,i] # select from y the ith column and shape as an array                    
                     loss += self.criterion(word_softmax_projection, target_y) 
                 
-                total_loss += loss.data.item()    
+                total_loss += loss.data.item() / batch_size    
                 
                 #print("\t\t\t Eval Loss: {}".format(loss.data.item()))
                 if print_example:
                     print_example = False 
-                    print()                    
+                    print()    
                     print("\n\n----- X:")
-                    print("".join([self.i2w[str(wi.data.item())] for wi in x[0] if str(wi.data.item())!="0"]))                                            
+                    print(" ".join([self.src_i2w[str(wi.data.item())] for wi in x[0]]))                                            
                     print("----- Y:")
-                    print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))                    
+                    print(" ".join([self.tgt_i2w[str(wi.data.item())] for wi in y[0]]))                    
                     print("----- OUR PREDICTION:")
-                    print(" ".join([self.i2w[str(wi)] for wi in example_array]))
+                    print(" ".join([self.tgt_i2w[str(wi)] for wi in example_array]))
                     print()
                     print(" ".join([str(wi.data.item()) for wi in y[0]]))
                     print(" ".join([str(wi) for wi in example_array]))
                     print()
-                    #self.writer.add_text('EvalText', " ".join([self.i2w[str(wi.data.item())] for wi in y[0]]) + " --vs-- "+" ".join([self.i2w[str(wi)] for wi in example_array]), self.epoch)                    
+            
+        self.log.var("Loss|Train loss|Validation loss", self.epoch, total_loss, y_index=1)
+        self.log.draw()        
         
         pbar.update(text="Epoch {:d}, eval done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(valid_loader))) 
     
@@ -555,8 +560,10 @@ class LSTMEncoderDecoderAtt(nn.Module):
         self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
         self.attention.load_state_dict(checkpoint["attention_state_dict"])
         #self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.w2i = checkpoint["w2i"]
-        self.i2w = checkpoint["i2w"]
+        self.src_w2i = checkpoint["src_w2i"]
+        self.src_i2w = checkpoint["src_i2w"]
+        self.tgt_w2i = checkpoint["tgt_w2i"]
+        self.tgt_i2w = checkpoint["tgt_i2w"]  
         self.teacher_forcing_ratio = checkpoint["teacher_forcing_ratio"]
         self.epoch = checkpoint["epoch"]
         self.gradient_clip = checkpoint["gradient_clip"]        
@@ -582,8 +589,10 @@ class LSTMEncoderDecoderAtt(nn.Module):
         checkpoint["decoder_state_dict"] = self.decoder.state_dict()
         checkpoint["attention_state_dict"] = self.attention.state_dict()
         checkpoint["optimizer_state_dict"] = self.optimizer.state_dict()
-        checkpoint["w2i"] = self.w2i
-        checkpoint["i2w"] = self.i2w
+        checkpoint["src_w2i"] = self.src_w2i
+        checkpoint["src_i2w"] = self.src_i2w
+        checkpoint["tgt_w2i"] = self.tgt_w2i
+        checkpoint["tgt_i2w"] = self.tgt_i2w
         checkpoint["teacher_forcing_ratio"] = self.teacher_forcing_ratio
         checkpoint["epoch"] = self.epoch
         checkpoint["gradient_clip"] = self.gradient_clip

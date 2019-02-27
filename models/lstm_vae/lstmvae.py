@@ -18,7 +18,7 @@ from util.log import Log
 
 
 class LSTMVAE(nn.Module):
-    def __init__(self, w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
+    def __init__(self, src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
         super(LSTMVAE, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
@@ -27,8 +27,8 @@ class LSTMVAE(nn.Module):
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.gradient_clip = gradient_clip
         
-        self.encoder = SimpleLSTMEncoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
-        self.decoder = SimpleLSTMDecoderLayer(len(w2i), embedding_dim, encoder_hidden_dim, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        self.encoder = SimpleLSTMEncoderLayer(len(src_w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
+        self.decoder = SimpleLSTMDecoderLayer(len(tgt_w2i), embedding_dim, encoder_hidden_dim, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
         #self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
         self.vae = VAE(encoder_hidden_dim*2, encoder_hidden_dim)
         
@@ -36,12 +36,16 @@ class LSTMVAE(nn.Module):
         self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.vae.parameters()), lr=lr)        
         self.criterion = nn.CrossEntropyLoss(ignore_index = 0)
         
-        self.w2i = w2i
-        self.i2w = i2w
+        self.src_w2i = src_w2i        
+        self.src_i2w = src_i2w
+        self.tgt_w2i = tgt_w2i
+        self.tgt_i2w = tgt_i2w
         self.epoch = 0
         self.lr = lr
-        self.vocab_size = len(w2i)
-        print("Vocab size: {}".format(self.vocab_size))
+        self.src_vocab_size = len(src_w2i)
+        self.tgt_vocab_size = len(tgt_w2i)
+        print("Source vocab size: {}".format(self.src_vocab_size))
+        print("Target vocab size: {}".format(self.tgt_vocab_size))
         
         self.train_on_gpu=torch.cuda.is_available()        
         if(self.train_on_gpu):
@@ -74,7 +78,7 @@ class LSTMVAE(nn.Module):
         if(self.train_on_gpu):
             self.encoder.cuda()
             self.decoder.cuda()
-            self.attention.cuda()
+            self.vae.cuda()
         
         best_loss = 1000000.
         best_epoch = -1
@@ -114,9 +118,9 @@ class LSTMVAE(nn.Module):
                         
             #if counter > 1:               
             #    break                
-            if counter % 1000 == 0 and counter > 0:
+            if counter % 500 == 0 and counter > 0:
                 self.save_checkpoint("last")
-            
+                
             loss = 0   
             """            
             if x.size(0) != batch_size:
@@ -186,11 +190,14 @@ class LSTMVAE(nn.Module):
                 loss += self.criterion(word_softmax_projection, target_y)
             
             global_step = (self.epoch-1)*len(train_loader)+counter   
-            print("epoch {}, counter {}, global_step {}".format(self.epoch, counter, global_step))        
+            #print("epoch {}, counter {}, global_step {}".format(self.epoch, counter, global_step))        
             self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, loss.data.item() ,y_index=1)
+            
             KL_weight = self.vae.kl_anneal_function(global_step)
             self.log.var("KL weight", global_step, KL_weight, y_index=0)
             KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+            self.log.var("KLD", global_step, KLD.data.item() ,y_index=0)
+            
             KLD *= KL_weight
             self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, KLD.data.item() ,y_index=2)
             
@@ -208,9 +215,11 @@ class LSTMVAE(nn.Module):
             
             #self.writer.add_scalar('Train/Loss', loss.data.item())            
             #break
-        
+            self.log.draw()
+            self.log.draw(last_quarter = True)
+            
         pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(train_loader))) 
-        self.log.draw()
+        
         
         return total_loss/len(train_loader)
     
@@ -453,7 +462,7 @@ class LSTMVAE(nn.Module):
                                 
                 loss = 0             
                 print_example = True
-                example_array = []
+                example_array = [2]
                 
                 for i in range(max_seq_len_y): 
                     #print("\t Decoder step {}/{}".format(i, max_seq_len_y))                        
@@ -478,13 +487,13 @@ class LSTMVAE(nn.Module):
                 #print("\t\t\t Eval Loss: {}".format(loss.data.item()))
                 if print_example:
                     print_example = False 
-                    print()                    
+                    print()    
                     print("\n\n----- X:")
-                    print(" ".join([self.i2w[str(wi.data.item())] for wi in x[0]]))                                            
+                    print(" ".join([self.src_i2w[str(wi.data.item())] for wi in x[0]]))                                            
                     print("----- Y:")
-                    print(" ".join([self.i2w[str(wi.data.item())] for wi in y[0]]))                    
+                    print(" ".join([self.tgt_i2w[str(wi.data.item())] for wi in y[0]]))                    
                     print("----- OUR PREDICTION:")
-                    print(" ".join([self.i2w[str(wi)] for wi in example_array]))
+                    print(" ".join([self.tgt_i2w[str(wi)] for wi in example_array]))
                     print()
                     print(" ".join([str(wi.data.item()) for wi in y[0]]))
                     print(" ".join([str(wi) for wi in example_array]))
@@ -574,8 +583,10 @@ class LSTMVAE(nn.Module):
         self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
         self.vae.load_state_dict(checkpoint["vae_state_dict"])
         #self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        self.w2i = checkpoint["w2i"]
-        self.i2w = checkpoint["i2w"]
+        self.src_w2i = checkpoint["src_w2i"]
+        self.src_i2w = checkpoint["src_i2w"]
+        self.tgt_w2i = checkpoint["tgt_w2i"]
+        self.tgt_i2w = checkpoint["tgt_i2w"]        
         self.teacher_forcing_ratio = checkpoint["teacher_forcing_ratio"]
         self.epoch = checkpoint["epoch"]
         self.gradient_clip = checkpoint["gradient_clip"]        
@@ -600,9 +611,11 @@ class LSTMVAE(nn.Module):
         checkpoint["encoder_state_dict"] = self.encoder.state_dict()
         checkpoint["decoder_state_dict"] = self.decoder.state_dict()
         checkpoint["vae_state_dict"] = self.vae.state_dict()
-        checkpoint["optimizer_state_dict"] = self.optimizer.state_dict()
-        checkpoint["w2i"] = self.w2i
-        checkpoint["i2w"] = self.i2w
+        checkpoint["optimizer_state_dict"] = self.optimizer.state_dict()        
+        checkpoint["src_w2i"] = self.src_w2i
+        checkpoint["src_i2w"] = self.src_i2w
+        checkpoint["tgt_w2i"] = self.tgt_w2i
+        checkpoint["tgt_i2w"] = self.tgt_i2w
         checkpoint["teacher_forcing_ratio"] = self.teacher_forcing_ratio
         checkpoint["epoch"] = self.epoch
         checkpoint["gradient_clip"] = self.gradient_clip

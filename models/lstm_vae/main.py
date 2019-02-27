@@ -9,20 +9,21 @@ import torch.nn as nn
 from lstm_vae.lstmvae import LSTMVAE
 
 # loading data
-import util.loaders
-#import loaders.dummyloaders
+#import util.loaders
+import util.biloaders
 
-data_folder = os.path.join("..","..","data","cnndm","bpe","ready","cnndm.8K.bpe.model")
+#data_folder = os.path.join("..","..","data","cnndm","bpe","ready","cnndm.8K.bpe.model")
+data_folder = os.path.join("..","..","data","roen","ready","setimes.8K.bpe")
 
 batch_size = 64
 print("Loading data ...")
-train_loader, valid_loader, test_loader, w2i, i2w = util.loaders.prepare_dataloaders(data_folder, batch_size, 150)
-#train_loader, valid_loader, test_loader, w2i, i2w = loaders.dummyloaders.prepare_dataloaders(data_folder, batch_size)
+#train_loader, valid_loader, test_loader, w2i, i2w = util.loaders.prepare_dataloaders(data_folder, batch_size, 1000, 5)
+train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = util.biloaders.prepare_dataloaders(data_folder, batch_size, 1000, 5)
 print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
     len(train_loader.dataset.X),
     len(valid_loader.dataset.X),
     len(test_loader.dataset.X),
-    len(w2i)))
+    len(src_w2i)))
 
 
 # x and y start with BOS (2), end with EOS(3), are padded with PAD (0) and unknown words are UNK (1)
@@ -36,16 +37,16 @@ print(y_sequence[0]) # ex: tensor([    2, 12728, 49279, 13516,  4576, 25888,  14
 
 
 # Instantiate the model w/ hyperparams
-embedding_dim = 10 #128 #10 #100
-encoder_hidden_dim = 24 #256 #128 #256
-decoder_hidden_dim = 50 #encoder_hidden_dim*2 # for bidirectional LSTM in the encoder
-encoder_n_layers = 2
-decoder_n_layers = 2
+embedding_dim = 256 #128 #10 #100
+encoder_hidden_dim = 256 #256 #128 #256
+decoder_hidden_dim = 512 #encoder_hidden_dim*2 # for bidirectional LSTM in the encoder
+encoder_n_layers = 1
+decoder_n_layers = 1
 encoder_drop_prob = 0.3
 decoder_drop_prob = 0.3
 lr = 0.001
 
-net = LSTMVAE(w2i, i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr = lr, model_store_path = "../../train/lstm_vae")
+net = LSTMVAE(src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr = lr, model_store_path = "../../train/lstm_vae")
 
 print(net)
 
