@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, VAE
+from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, VAE, DroppedLSTMDecoderLayer
 import numpy as np
 
 # Append parent dir to sys path.
@@ -18,19 +18,26 @@ from util.log import Log
 
 
 class LSTMVAE(nn.Module):
-    def __init__(self, src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=0.5, decoder_drop_prob=0.5, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None):
+    def __init__(self, src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers = 1, decoder_n_layers = 1, encoder_drop_prob=0.5, decoder_drop_prob=0.5, latent_size = 64, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None, vae_kld_anneal_k = 0.0025, vae_kld_anneal_x0 = 2500, vae_kld_anneal_function="linear", decoder_word_input_drop = 0.5):
         super(LSTMVAE, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_n_layers = decoder_n_layers
+        self.latent_size = latent_size
         self.teacher_forcing_ratio = teacher_forcing_ratio
         self.gradient_clip = gradient_clip
+        self.vae_kld_anneal_k = vae_kld_anneal_k
+        self.vae_kld_anneal_x0 = vae_kld_anneal_x0
+        self.vae_kld_anneal_function = vae_kld_anneal_function
+        self.decoder_word_input_drop = decoder_word_input_drop
         
         self.encoder = SimpleLSTMEncoderLayer(len(src_w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
-        self.decoder = SimpleLSTMDecoderLayer(len(tgt_w2i), embedding_dim, encoder_hidden_dim, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        #self.decoder = SimpleLSTMDecoderLayer(len(tgt_w2i), embedding_dim, self.latent_size, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
+        self.decoder = DroppedLSTMDecoderLayer(len(tgt_w2i), embedding_dim, self.latent_size, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob, decoder_word_input_drop)
+        
         #self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
-        self.vae = VAE(encoder_hidden_dim*2, encoder_hidden_dim)
+        self.vae = VAE(encoder_hidden_dim*2, self.latent_size)
         
         
         self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.vae.parameters()), lr=lr)        
@@ -160,7 +167,7 @@ class LSTMVAE(nn.Module):
             decoder_output = decoder_output[-1].permute(1,0,2) 
             #print(decoder_output.size())
                 
-            loss = 0                 
+            recon_loss = 0                 
             for i in range(max_seq_len_y): 
                 #print("\t Decoder step {}/{}".format(i, max_seq_len_y))    
                 
@@ -187,24 +194,27 @@ class LSTMVAE(nn.Module):
                 # target_y now looks like [ 10, 2323, 5739, 24, 9785 ... ] of size 64 (batch_size)
                 #print(word_softmax_projection.size())
                 #print(target_y.size())
-                loss += self.criterion(word_softmax_projection, target_y)
+                recon_loss += self.criterion(word_softmax_projection, target_y)
+                # end decoder individual step
+                
+            global_minibatch_step = (self.epoch-1)*len(train_loader)+counter   
+            #print("epoch {}, counter {}, global_minibatch_step {}".format(self.epoch, counter, global_minibatch_step))        
             
-            global_step = (self.epoch-1)*len(train_loader)+counter   
-            #print("epoch {}, counter {}, global_step {}".format(self.epoch, counter, global_step))        
-            self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, loss.data.item() ,y_index=1)
+            self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, recon_loss.data.item(), y_index=1)
             
-            KL_weight = self.vae.kl_anneal_function(global_step)
-            self.log.var("KL weight", global_step, KL_weight, y_index=0)
+            KL_weight = self.vae.kl_anneal_function(step=global_minibatch_step, k=self.vae_kld_anneal_k, x0=self.vae_kld_anneal_x0, anneal_function=self.vae_kld_anneal_function)
+            self.log.var("KLD weight", global_minibatch_step, KL_weight, y_index=0)
+            
             KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-            self.log.var("KLD", global_step, KLD.data.item() ,y_index=0)
+            self.log.var("KLD", global_minibatch_step, KLD.data.item(), y_index=0)
             
             KLD *= KL_weight
-            self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, KLD.data.item() ,y_index=2)
+            self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, KLD.data.item(), y_index=2)
             
-            loss += KLD
-            self.log.var("train_loss|Total loss|Cross Entropy Loss|KL Loss", global_step, loss.data.item() ,y_index=0)
+            loss = recon_loss + KLD
+            self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, loss.data.item(), y_index=0)
                         
-            total_loss += loss.data.item() / batch_size
+            total_loss += loss.data.item() / batch_size 
             loss.backward() # calculate the loss and perform backprop
             
             # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
@@ -217,11 +227,13 @@ class LSTMVAE(nn.Module):
             #break
             self.log.draw()
             self.log.draw(last_quarter = True)
-            
-        pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss/len(train_loader))) 
+            # end batch
+        
+        #end epoch
+        pbar.update(text="Epoch {:d}, train done, average loss \033[93m{:.6f}\033[0m".format(self.epoch, total_loss))  #/len(train_loader)
         
         
-        return total_loss/len(train_loader)
+        return total_loss #/len(train_loader)
     
     def run (self, data_loader, batch_size, beam_size=3): #data is either a list of lists or a dataset_loader
         self.encoder.eval()

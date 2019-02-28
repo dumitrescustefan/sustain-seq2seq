@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math 
 import numpy as np
+import random
 
 from pprint import pprint
 
@@ -96,6 +97,57 @@ class SimpleLSTMDecoderLayer(nn.Module):
         else:
             return ( h_a, h_b )   
 
+class DroppedLSTMDecoderLayer(nn.Module):        
+    def __init__(self, vocab_size, embedding_dim, encoder_output_dim, hidden_dim, n_layers, drop_prob=0.3, input_word_drop=0.5):        
+        super(DroppedLSTMDecoderLayer, self).__init__()
+
+        self.vocab_size = vocab_size
+        self.input_dim = embedding_dim + encoder_output_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = vocab_size
+        self.n_layers = n_layers
+        self.train_on_gpu = torch.cuda.is_available()
+        self.input_word_drop = input_word_drop
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')        
+        
+        self.embedding = nn.Embedding(vocab_size, embedding_dim) 
+        self.lstm = nn.LSTM(self.input_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True)
+        self.softmax_projection = nn.Linear(hidden_dim, vocab_size)
+    
+    def forward_step(self, prev_y, prev_decoder_hidden, encoder_output, force_keep_prev_y=False):      
+        # prev_embedding is a batch_size * 1 containing 1 word index (previous)
+        if random.random()<=self.input_word_drop and force_keep_prev_y == False:
+            prev_y = torch.ones(prev_y.size(0),1, dtype = torch.long, device = self.device) # <UNK>                        
+        prev_y = self.embedding(prev_y)
+        # prev_embedding is a batch_size * 1 * embedding_dim containing 1 word embedding (previous)
+        
+        # encoder_output is batch_size x enc_hidden_dim
+        #print(prev_y.size())
+        #print(encoder_output.size())
+        
+        # update rnn hidden state
+        input = torch.cat([prev_y, encoder_output.unsqueeze(1)], dim=2)
+        output, decoder_hidden = self.lstm(input, prev_decoder_hidden)
+        
+        #word_softmax_projection = torch.cat([prev_y, output, context], dim=2)         ???
+        word_softmax_projection = self.softmax_projection(output)
+
+        return output, decoder_hidden, word_softmax_projection
+
+    def init_hidden(self, batch_size): 
+        weight = next(self.parameters()).data # get any parameter of the network, use new to obtain same type of variable
+        h_a = weight.new(self.n_layers, batch_size, self.hidden_dim)
+        h_b = weight.new(self.n_layers, batch_size, self.hidden_dim)
+                
+        nn.init.xavier_normal_(h_a) # in-place xavier init        
+        nn.init.xavier_normal_(h_b) 
+        
+        if (self.train_on_gpu):
+            return ( h_a.cuda(), h_b.cuda() )
+        else:
+            return ( h_a, h_b )   
+
+            
 class VAE(nn.Module):            
     def __init__(self, input_size, latent_size):
         super(VAE, self).__init__()
@@ -110,8 +162,7 @@ class VAE(nn.Module):
         eps = torch.randn_like(std_dev)
         return eps.mul(std_dev).add_(mu) #z = z * std + mu
     
-    def forward(self, input):
-        # reshape?
+    def forward(self, input):        
         mu = self.mu_layer(input)
         logvar = self.logvar_layer(input)        
         z = self._reparametrize(mu, logvar)
