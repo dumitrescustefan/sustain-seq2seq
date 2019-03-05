@@ -6,7 +6,7 @@ class InputLayerWithAbsolutePosition(nn.Module):
     """
        
     """
-    def __init__(self, vocab_size, embedding_dim, max_seq_len-512): # transforms a batched padded input sequence in absolute positional embeddings
+    def __init__(self, vocab_size, embedding_dim, max_seq_len=512): # transforms a batched padded input sequence in absolute positional embeddings
         super(InputLayerWithAbsolutePosition).__init__()
         
         self.embedding_dim = embedding_dim        

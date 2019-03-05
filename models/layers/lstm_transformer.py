@@ -10,7 +10,7 @@ from input import InputLayerWithAbsolutePosition
 from attention import SelfAttention
 
 class SelfAttentionLSTMEncoderLayer(nn.Module):
-    def __init__(self, input_dim, rnn_hidden_dim, rnn_layers, drop_prob=0.2, attention_probs_dropout_prob=0.2, num_attention_heads = 8):        
+    def __init__(self, input_dim, rnn_hidden_dim, rnn_layers, drop_prob=0.2, attention_probs_dropout_prob=0.2, num_attention_heads=8):        
         """
             This is a layer that takes as input a tensor (batch_size, seq_len, input_dim)
             passes it through the self attention that outputs (batch_size, seq_len, input_dim) (similar to input)
