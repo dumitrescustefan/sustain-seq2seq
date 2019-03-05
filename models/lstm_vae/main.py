@@ -40,18 +40,18 @@ print(y_sequence[0]) # ex: tensor([    2, 12728, 49279, 13516,  4576, 25888,  14
 # Instantiate the model w/ hyperparams
 embedding_dim = 256 #128 #10 #100
 encoder_hidden_dim = 256 #256 #128 #256
-decoder_hidden_dim = 128 #encoder_hidden_dim*2 # for bidirectional LSTM in the encoder
+decoder_hidden_dim = 256 #encoder_hidden_dim*2 # for bidirectional LSTM in the encoder
 encoder_n_layers = 1
 decoder_n_layers = 1
 encoder_drop_prob = 0.3
 decoder_drop_prob = 0.3
 lr = 0.001
-teacher_forcing_ratio = 0.25 # in this % of cases will force teach
-decoder_word_input_drop = 0.85 # in this % of cases the decoder will use <UNK> as input (prevent VAE posterior collapse)
+teacher_forcing_ratio = 0.5 # in this % of cases will force teach
+decoder_word_input_drop = 0.25 # in this % of cases the decoder will use <UNK> as input (prevent VAE posterior collapse)
 
 latent_size = 256
 vae_kld_anneal_k = 0.0025 
-vae_kld_anneal_x0 = 3000 #int(len(train_loader)/batch_size) / 2
+vae_kld_anneal_x0 = 2000 #int(len(train_loader)/batch_size) / 2
 vae_kld_anneal_function = "linear" # "logistic"
 
 print("vae_kld_anneal_x0 = "+str(vae_kld_anneal_x0))

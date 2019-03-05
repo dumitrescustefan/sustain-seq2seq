@@ -6,35 +6,85 @@ import random
 
 from pprint import pprint
 
-class SimpleLSTMEncoderLayer(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, n_layers, drop_prob=0.3):        
-        super(SimpleLSTMEncoderLayer, self).__init__()
 
-        self.n_layers = n_layers
-        self.hidden_dim = hidden_dim
-        self.train_on_gpu=torch.cuda.is_available()
+class InputLayerWithAbsolutePosition(nn.Module):
+    """
+       
+    """
+    def __init__(self, vocab_size, embedding_dim, max_seq_len-512): # transforms a batched padded input sequence in absolute positional embeddings
+        super(InputLayerWithAbsolutePosition).__init__()
+        
+        self.embedding_dim = embedding_dim        
+        self.max_seq_len = max_seq_len # this is only for positional embeddings to preinitialize only max_seq_len positions
         self.vocab_size = vocab_size
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')                
+        position_enc = np.array([ [pos / np.power(10000, 2 * (j // 2) / embedding_dim) for j in range(embedding_dim)] if pos != 0 else np.zeros(embedding_dim) for pos in range(max_seq_len+1)]) 
+        position_enc[1:, 0::2] = np.sin(position_enc[1:, 0::2]) 
+        position_enc[1:, 1::2] = np.cos(position_enc[1:, 1::2]) 
         
-        # embedding and LSTM layers
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
-        self.dropout = nn.Dropout(drop_prob)
+        self.absolute_position_embedding = torch.nn.Embedding(max_seq_len+1, embedding_dim, padding_idx=0)
+        self.absolute_position_embedding.weight.data = torch.FloatTensor(position_enc, device = self.device)        
+        
+    def forward(self, input_tensor, add_positional_encoding = True):
+        """
+        For encoder, process full sequence
+            Input is (batch_size, max_seq_len) zero padded indexes
+            Output is (batch_size, max_seq_len, embedding_dim)
+        """        
+        output_tensor = self.embedding(input_tensor)
+        if not add_positional_encoding:
+            return output_tensor
+        
+        # calculate lengths of input tensors
+        lengths = [] 
+        batch_size = input_tensor.size(0)
+        for i in range(batch_size):
+            li = np.arange(1, sequence_lenghts[i]+1, dtype=long)
+            if sequence_lenghts[i]<self.max_seq_len: # pad with zeroes
+                li += np.zeros(self.max_seq_len - sequence_lenghts[i], dtype=long)                
+            lengths.append(li)
+        lengths = torch.tensor(lengths, device = self.device)        
+        # lengths is an array of (bs, seq_len) with each row as [1,2,3, k, 0,0..0] of len max_seq_len        
+        return output_tensor + self.absolute_position_embedding(lengths) 
+    
+    def forward_step(self, input_tensor_element, add_positional_encoding = True): 
+        """
+        For decoder, process one step at a time
+            Input is (batch_size, 1) containing index of word
+            Output is (batch_size, 1, embedding_dim)
+        """
+        # todo in decode
+        pass
+    
+class SelfAttentionLSTMEncoderLayer(nn.Module):
+    def __init__(self, input_dim, rnn_hidden_dim, rnn_layers, drop_prob=0.2, attention_probs_dropout_prob=0.2, num_attention_heads = 8):        
+        """
+            This is a layer that takes as input a tensor (batch_size, seq_len, input_dim)
+            passes it through the self attention that outputs (batch_size, seq_len, input_dim) (similar to input)
+            and then runs a bidirectional RNN. It outputs a (batch_size, seq_len, rnn_hidden_dim*2) tensor.
+        """
+        super(SimpleLSTMEncoderLayer, self).__init__()
+        
+        self.rnn_layers = rnn_layers
+        self.rnn_hidden_dim = rnn_hidden_dim                     
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')        
+        
+        self.self_attention = SelfAttention(input_dim, num_attention_heads, attention_probs_dropout_prob = attention_probs_dropout_prob)
+        self.lstm = nn.LSTM(input_dim, rnn_hidden_dim, rnn_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
+        self.dropout = nn.Dropout(drop_prob)        
      
-    def forward(self, x, hidden):        
-        batch_size = x.size(0)
-        #64 x 399         
-        x = self.embedding(x)
-        #64 x 399 x embedding_dim
+    def forward(self, input_tensor, attention_mask, rnn_hidden): # input tensor is (batch_size, max_seq_len, hidden_dim)
+        batch_size = input_tensor.size(0)
+        # input_tensor is (batch_size, seq_len, input_dim)
+        self_attention_tensor = self.self_attention(input_tensor, attention_mask)
+        # self_attention_tensor is (batch_size, seq_len, input_dim)
         
-        # embeddings and lstm_out        
-        lstm_out, hidden = self.lstm(x, hidden)        
-        # lstm_out is 64 x 399 x hidden_dim * num_directions
+        lstm_output, rnn_hidden = self.lstm(self_attention_tensor, rnn_hidden)        
+        # lstm_output is (batch_size, seq_len, rnn_hidden_dim * 2)
         
-        # from documentation, separate directions: the directions can be separated using output.view(seq_len, batch, num_directions, hidden_size), with forward and backward being direction 0 and 1 respectively. 
-        # we'll use a larger hidden size in the decoder instead of projecting or summing the fw/bw hidden outputs
-        
-        lstm_out = self.dropout(lstm_out)        
-        return lstm_out, hidden
+        lstm_output = self.dropout(lstm_output)        
+        return lstm_output, rnn_hidden
     
     
     def init_hidden(self, batch_size):
@@ -44,12 +94,71 @@ class SimpleLSTMEncoderLayer(nn.Module):
         cell = weight.new(self.n_layers*2, batch_size, self.hidden_dim)
                 
         nn.init.xavier_normal_(hidd) # in-place xavier init        
-        nn.init.xavier_normal_(cell) 
+        nn.init.xavier_normal_(cell) # in-place xavier init
         
         if (self.train_on_gpu):
             return ( hidd.cuda(), cell.cuda() )
         else:
             return ( hidd, cell )        
+
+class SelfAttentionEncoderStack(nn.Module):
+    """
+    
+    """
+    def __init__(self, n_layers, input_dim, rnn_hidden_dim, max_seq_len=512, rnn_layers=1, drop_prob=0.2, attention_probs_dropout_prob=0.2, num_attention_heads = 8):
+        self.n_layers = n_layers
+        self.input_dim = input_dim
+        self.rnn_hidden_dim = rnn_hidden_dim
+        self.max_seq_len = max_seq_len
+        self.rnn_layers = rnn_layers
+        self.drop_prob = drop_prob
+        self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.num_attention_heads = num_attention_heads
+        
+        base_layer = SelfAttentionLSTMEncoderLayer(input_dim, rnn_hidden_dim, rnn_layers, drop_prob, attention_probs_dropout_prob, num_attention_heads)        
+        if n_layers == 1:
+            self.stack = nn.ModuleList([base_layer])
+        else: 
+            self.stack = nn.ModuleList([base_layer] + [SelfAttentionLSTMEncoderLayer(rnn_hidden_dim, rnn_hidden_dim, rnn_layers, drop_prob, attention_probs_dropout_prob, num_attention_heads) for _ in range(n_layers-1)])
+    
+    def forward(self, input_tensor, attention_mask = None, return_all_layers = True, return_all_states = True):    
+        batch_size = input_tensor.size(0)
+        """
+            return_all_states returns a tensor of n_layers containing either the last state(concat of fw and bw) or all outputs for all timesteps
+            return_all_layers returns either all n_layers or just the final layer's output
+            if return_all_states is True:
+                output is (batch_size, n_layers_or_last_1, seq_len, rnn_hidden_dim*2)
+            else:
+                output is (batch_size, n_layers_or_last_1, 1, rnn_hidden_dim*2)
+        """
+        # todo XXX if attention_mask is none, all are treated
+        
+        # forward        
+        output = None
+        for i, layer in enumerate(self.stack):            
+            output_tensor, _ = layer(input_tensor, attention_mask, layer.init_hidden(batch_size))
+            input_tensor = output_tensor
+            # output_tensor is (batch_size, seq_len, rnn_hidden_dim * 2)
+            
+            # unsqueeze to (batch_size, 1, seq_len, rnn_hidden_dim * 2)
+            output_tensor = output_tensor.unsqueeze(1)
+                        
+            if not return_all_states: # extract only last state, so generate a (batch_size, 1, rnn_hidden_dim * 2) tensor
+                temp = torch.zeros(batch_size, self.encoder_hidden_dim*2, device=self.device) # was with ,1, in middle ?
+                for j in range(batch_size):
+                    encoder_last_output[j] = encoder_output[j][-1]
+            
+            # at this point, output_tensor is a (batch_size, 1-or-seq_len, rnn_hidden_dim * 2)
+            
+            if output_all_encoded_layers == True:
+                if output == None: # first layer
+                    output = output_tensor
+                else: # concat along dim 1
+                    #output = output.
+            else:
+                output = output_tensor # just return the 
+        
+        return output
         
 class SimpleLSTMDecoderLayer(nn.Module):        
     def __init__(self, vocab_size, embedding_dim, encoder_output_dim, hidden_dim, n_layers, drop_prob=0.3):        
@@ -282,7 +391,7 @@ class Beam():
         return False if self.sequence[-1] != 0 else True
 
         
-class not_used_AbsolutePositionEmbeddings(nn.Module):
+class AbsolutePositionEmbeddings(nn.Module):
     def __init__(self, max_seq_len, embedding_dim):    
         super(AbsolutePositionEmbeddings,self).__init__() # max_seq_len + 1 because zero index has all zeroes       
         self.embedding = nn.Embedding(vocab_size, embedding_dim) 
