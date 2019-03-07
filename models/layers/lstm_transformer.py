@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
-import math 
+import math, random, os
 import numpy as np
-import random
 
 from pprint import pprint
 
-from input import InputLayerWithAbsolutePosition
-from attention import SelfAttention
+# Append parent dir to sys path.
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.sys.path.insert(0, parentdir)
+
+from layers.attention import SelfAttention
 
 class SelfAttentionLSTMEncoderLayer(nn.Module):
     def __init__(self, input_dim, rnn_hidden_dim, rnn_layers, drop_prob=0.2, attention_probs_dropout_prob=0.2, num_attention_heads=8):        
@@ -120,6 +122,8 @@ class SelfAttentionLSTMEncoderStack(nn.Module):
             else:
                 output = output_tensor # just return the (batch_size, 1, 1-or-seq_len, rnn_hidden_dim * 2)
         return output
+
+
 
         
 #testing

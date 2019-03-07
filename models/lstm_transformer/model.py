@@ -5,42 +5,44 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from layers import SimpleLSTMEncoderLayer, SimpleLSTMDecoderLayer, VAE, DroppedLSTMDecoderLayer
 import numpy as np
 
 # Append parent dir to sys path.
 parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.sys.path.insert(0, parentdir)
+
+from layers.input import InputLayerWithAbsolutePosition
+from layers.lstm_transformer import SelfAttentionLSTMEncoderStack
+from layers.attention import AdditiveAttention
+from layers.layers import SimpleLSTMDecoderLayer, DroppedLSTMDecoderLayer
+
 from util.progressbar import ProgressBar
 from util.log import Log
 
 
 
 
-class LSTMVAE(nn.Module):
-    def __init__(self, src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers = 1, decoder_n_layers = 1, encoder_drop_prob=0.5, decoder_drop_prob=0.5, latent_size = 64, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None, vae_kld_anneal_k = 0.0025, vae_kld_anneal_x0 = 2500, vae_kld_anneal_function="linear", decoder_word_input_drop = 0.5):
-        super(LSTMVAE, self).__init__()
+class LSTMTransformer(nn.Module):
+    def __init__(self, src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers = 1, decoder_n_layers = 1, encoder_drop_prob=0.5, decoder_drop_prob=0.5, latent_size = 64, lr = 0.01, teacher_forcing_ratio=0.5, gradient_clip = 5, model_store_path = None, decoder_word_input_drop = 0.5):
+        super(LSTMTransformer, self).__init__()
         
         self.encoder_hidden_dim = encoder_hidden_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_n_layers = decoder_n_layers
         self.latent_size = latent_size
         self.teacher_forcing_ratio = teacher_forcing_ratio
-        self.gradient_clip = gradient_clip
-        self.vae_kld_anneal_k = vae_kld_anneal_k
-        self.vae_kld_anneal_x0 = vae_kld_anneal_x0
-        self.vae_kld_anneal_function = vae_kld_anneal_function
+        self.gradient_clip = gradient_clip       
         self.decoder_word_input_drop = decoder_word_input_drop
         
-        self.encoder = SimpleLSTMEncoderLayer(len(src_w2i), embedding_dim, encoder_hidden_dim, encoder_n_layers, encoder_drop_prob)
+        self.input = InputLayerWithAbsolutePosition(vocab_size=len(src_w2i), embedding_dim=embedding_dim, max_seq_len=512)
+        self.encoder = SelfAttentionLSTMEncoderStack(2, embedding_dim, encoder_hidden_dim, max_seq_len=512, rnn_layers=1, drop_prob=encoder_drop_prob, attention_probs_dropout_prob=0.2, num_attention_heads = 8)
         #self.decoder = SimpleLSTMDecoderLayer(len(tgt_w2i), embedding_dim, self.latent_size, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob)
         self.decoder = DroppedLSTMDecoderLayer(len(tgt_w2i), embedding_dim, self.latent_size, decoder_hidden_dim, decoder_n_layers, decoder_drop_prob, decoder_word_input_drop)
         
-        #self.attention = AttentionLayer(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
-        self.vae = VAE(encoder_hidden_dim*2, self.latent_size)
+        self.attention = AdditiveAttention(encoder_hidden_dim*2, decoder_hidden_dim) # *2 because encoder is bidirectional an thus hidden is double 
+        #self.vae = VAE(encoder_hidden_dim*2, self.latent_size)
         
-        
-        self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.vae.parameters()), lr=lr)        
+        self.optimizer = torch.optim.Adam(list(self.encoder.parameters())+list(self.decoder.parameters())+list(self.attention.parameters()), lr=lr)
         self.criterion = nn.CrossEntropyLoss(ignore_index = 0)
         
         self.src_w2i = src_w2i        
@@ -70,13 +72,6 @@ class LSTMVAE(nn.Module):
             
         self.log_path = os.path.join(self.model_store_path,"log")
         self.log = Log(self.log_path, clear=True)
-        """
-        import math
-        for i in range(100):
-            self.log.var("kl_loss",i,math.sin(i/20))
-            self.log.text("train = {}".format(math.sin(i/20)))
-        self.log.draw()
-        """
             
     def train(self, train_loader, valid_loader, test_loader, batch_size, patience = 10):                           
         current_patience = patience
@@ -85,7 +80,7 @@ class LSTMVAE(nn.Module):
         if(self.train_on_gpu):
             self.encoder.cuda()
             self.decoder.cuda()
-            self.vae.cuda()
+            self.attention.cuda()
         
         best_loss = 1000000.
         best_epoch = -1
@@ -108,7 +103,7 @@ class LSTMVAE(nn.Module):
         self.epoch += 1
         self.encoder.train()
         self.decoder.train()
-        self.vae.train()        
+        self.attention.train()        
         
         #encoder_hidden = self.encoder.init_hidden(batch_size)
         #decoder_hidden = self.decoder.init_hidden(batch_size)
@@ -139,27 +134,25 @@ class LSTMVAE(nn.Module):
             if(self.train_on_gpu):
                 x, y = x.cuda(), y.cuda()
 
-            encoder_hidden = self.encoder.init_hidden(batch_size)
+            x_attention_mask, x_incremental_mask = self.input.get_mask(x)
+            x_attention_mask = x_attention_mask.unsqueeze(1).unsqueeze(2).float()
+            x_attention_mask = (1.0 - x_attention_mask) * -10000.0
+            #y_attention_mask, y_incremental_mask = self.input.get_mask(y)   
+            
+            x = self.input(x, x_incremental_mask, add_positional_encoding = True)
+            #y = self.input(y, y_incremental_mask, add_positional_encoding = True)
+            
             decoder_hidden = self.decoder.init_hidden(batch_size)        
             #print(decoder_hidden[0].size())
             
             # zero grads in optimizer
             self.optimizer.zero_grad()                
             
-            # encoder
-            # x is batch_size x max_seq_len_x            
-            encoder_output, encoder_hidden = self.encoder(x, encoder_hidden)             
-            # encoder_output is batch_size x max_seq_len_x x encoder_hidden (where encoder_hidden is double because it is bidirectional)
-            # print(encoder_output.size())
-            
-            # take last state of encoder as encoder_last_output # not necessary when using attention                
-            encoder_last_output = torch.zeros(batch_size, self.encoder_hidden_dim*2, device=self.device) # was with ,1, in middle ?
-            for j in range(batch_size):
-                encoder_last_output[j] = encoder_output[j][-1]
-            # encoder_last_output is last state of the encoder batch_size * encoder_hidden_dim
-        
-            # VAE
-            z, mu, logvar = self.vae(encoder_last_output) # all are (batch_size, encoder_hidden_dim)
+            # encoder                  
+            #print(x.size())
+            encoder_output = self.encoder(x, attention_mask = x_attention_mask, return_all_layers = False, return_all_states = True)
+            encoder_output = encoder_output.squeeze(1)
+            #print(encoder_output.size())
             
             # create first decoder output for initial attention call, extract from decoder_hidden
             decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
@@ -183,8 +176,11 @@ class LSTMVAE(nn.Module):
                     #print(decoder_input.size()) # batch_size x 1                            
 
                 
-                # z context is batch_size * encoder_hidden_dim            
-                decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, z)
+                context = self.attention(encoder_output, decoder_output)
+                
+                # context is batch_size * encoder_hidden_dim*2
+                decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
+                     
                 # first, reduce word_softmax_projection which is torch.Size([64, 1, 50004]) to 64 * 50004
                 word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
                 
@@ -200,27 +196,15 @@ class LSTMVAE(nn.Module):
             global_minibatch_step = (self.epoch-1)*len(train_loader)+counter   
             #print("epoch {}, counter {}, global_minibatch_step {}".format(self.epoch, counter, global_minibatch_step))        
             
-            self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, recon_loss.data.item(), y_index=1)
-            
-            KL_weight = self.vae.kl_anneal_function(step=global_minibatch_step, k=self.vae_kld_anneal_k, x0=self.vae_kld_anneal_x0, anneal_function=self.vae_kld_anneal_function)
-            self.log.var("KLD weight", global_minibatch_step, KL_weight, y_index=0)
-            
-            KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-            self.log.var("KLD", global_minibatch_step, KLD.data.item(), y_index=0)
-            
-            KLD *= KL_weight
-            self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, KLD.data.item(), y_index=2)
-            
-            loss = recon_loss + KLD
-            self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, loss.data.item(), y_index=0)
-                        
+            #self.log.var("train_loss|Total loss|Recon loss|Weighted KLD loss", global_minibatch_step, recon_loss.data.item(), y_index=1)
+                       
             total_loss += loss.data.item() / batch_size 
             loss.backward() # calculate the loss and perform backprop
             
             # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
             nn.utils.clip_grad_norm_(self.encoder.parameters(), self.gradient_clip)
             nn.utils.clip_grad_norm_(self.decoder.parameters(), self.gradient_clip)
-            nn.utils.clip_grad_norm_(self.vae.parameters(), self.gradient_clip)
+            nn.utils.clip_grad_norm_(self.attention.parameters(), self.gradient_clip)
             self.optimizer.step()
             
             #self.writer.add_scalar('Train/Loss', loss.data.item())            
@@ -238,7 +222,7 @@ class LSTMVAE(nn.Module):
     def run (self, data_loader, batch_size, beam_size=3): #data is either a list of lists or a dataset_loader
         self.encoder.eval()
         self.decoder.eval()
-        self.vae.eval()            
+        self.attention.eval()            
         
         pbar = ProgressBar()
         pbar.set(total_steps=len(data_loader)) 
@@ -387,51 +371,11 @@ class LSTMVAE(nn.Module):
         scores = [ b.normalized_score for b in beams ]
         
         return sequences, scores, total_loss
-         
-    
-    def _run_batch_not_working (self, x, y, beam_size):
-        batch_size = x.size(0)
-        max_seq_len_x = x.size(1)
-        max_seq_len_y = y.size(1)
-        loss = 0
-        
-        encoder_hidden = self.encoder.init_hidden(batch_size)
-        decoder_hidden = self.decoder.init_hidden(batch_size)
-        
-        encoder_output, encoder_hidden = self.encoder(x, encoder_hidden) 
-        word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float, device=self.device)
-        word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it  #XXX
-        
-        decoder_output = decoder_hidden[0].view(self.decoder_n_layers, 1, batch_size, self.decoder_hidden_dim) #torch.Size([2, 1, 64, 512])
-        decoder_output = decoder_output[-1].permute(1,0,2) 
-                        
-        loss = 0 
-        total_loss = 0        
-        print_example = True
-        example_array = []
-        
-        for i in range(max_seq_len_y): 
-            #print("\t Decoder step {}/{}".format(i, max_seq_len_y))                        
-            _, decoder_input = word_softmax_projection.max(1) # no need for values, just indexes 
-            decoder_input = decoder_input.unsqueeze(1)                                           
-            context = self.attention(encoder_output, decoder_output)
-            
-            decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)                    
-            word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
-            if print_example:                        
-                _, mi = word_softmax_projection[0].max(0)
-                example_array.append(mi.item())
-                
-            target_y = y[:,i] # select from y the ith column and shape as an array                    
-            loss += self.criterion(word_softmax_projection, target_y) 
-        
-        total_loss += loss.data.item()  
-        return [], total_loss
         
     def _eval(self, valid_loader, batch_size):                
         self.encoder.eval()
         self.decoder.eval()
-        self.vae.eval()            
+        self.attention.eval()            
         
         pbar = ProgressBar()
         pbar.set(total_steps=len(valid_loader)) 
@@ -455,17 +399,14 @@ class LSTMVAE(nn.Module):
                 if(self.train_on_gpu):
                     x, y = x.cuda(), y.cuda()
                 
-                encoder_hidden = self.encoder.init_hidden(batch_size)
+                #encoder_hidden = self.encoder.init_hidden(batch_size)
                 decoder_hidden = self.decoder.init_hidden(batch_size)
         
-                encoder_output, encoder_hidden = self.encoder(x, encoder_hidden)                 
-                encoder_last_output = torch.zeros(batch_size, self.encoder_hidden_dim*2, device=self.device)
-                for j in range(batch_size):
-                    encoder_last_output[j] = encoder_output[j][-1]
-                
-                # VAE
-                z, mu, logvar = self.vae(encoder_last_output)
-                
+                #encoder_output, encoder_hidden = self.encoder(x, encoder_hidden)                 
+                attention_mask, _ = self.input.get_mask(x)
+                encoder_output, encoder_hidden = self.encoder(x, attention_mask = attention_mask, return_all_layers = False, return_all_states = True)
+                print(encoder_output.size())
+               
                 word_softmax_projection = torch.zeros(batch_size, 5, dtype = torch.float, device=self.device)
                 word_softmax_projection[:,2] = 1. # beginning of sentence value is 2, set it  #XXX
                 
@@ -481,7 +422,11 @@ class LSTMVAE(nn.Module):
                     _, decoder_input = word_softmax_projection.max(1) # no need for values, just indexes 
                     decoder_input = decoder_input.unsqueeze(1)          
                     
-                    decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, z)                    
+                    context = self.attention(encoder_output, decoder_output)
+                
+                    # context is batch_size * encoder_hidden_dim            
+                    decoder_output, decoder_hidden, word_softmax_projection = self.decoder.forward_step(decoder_input, decoder_hidden, context)
+                          
                     word_softmax_projection = word_softmax_projection.squeeze(1) # eliminate dim 1
                     if print_example:                        
                         _, mi = word_softmax_projection[0].max(0)
@@ -593,7 +538,7 @@ class LSTMVAE(nn.Module):
         checkpoint = torch.load(filename)        
         self.encoder.load_state_dict(checkpoint["encoder_state_dict"])
         self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
-        self.vae.load_state_dict(checkpoint["vae_state_dict"])
+        self.attention.load_state_dict(checkpoint["attention_state_dict"])
         #self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.src_w2i = checkpoint["src_w2i"]
         self.src_i2w = checkpoint["src_i2w"]
@@ -622,7 +567,7 @@ class LSTMVAE(nn.Module):
         checkpoint = {}
         checkpoint["encoder_state_dict"] = self.encoder.state_dict()
         checkpoint["decoder_state_dict"] = self.decoder.state_dict()
-        checkpoint["vae_state_dict"] = self.vae.state_dict()
+        checkpoint["attention_state_dict"] = self.attention.state_dict()
         checkpoint["optimizer_state_dict"] = self.optimizer.state_dict()        
         checkpoint["src_w2i"] = self.src_w2i
         checkpoint["src_i2w"] = self.src_i2w

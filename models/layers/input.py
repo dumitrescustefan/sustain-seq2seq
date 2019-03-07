@@ -33,7 +33,7 @@ class InputLayerWithAbsolutePosition(nn.Module):
         if not add_positional_encoding:
             return output_tensor
            
-        if incremental_mask is None:
+        if incremental_mask is None:            
             _, incremental_mask = self.get_mask(input_tensor)
         
         # lengths is an array of (bs, seq_len) with each row as [1,2,3, k, 0,0..0] of len max_seq_len        
@@ -57,10 +57,11 @@ class InputLayerWithAbsolutePosition(nn.Module):
         incremental_mask = []
         attention_mask = []
         batch_size = input_tensor.size(0)
-        seq_len = input_tensor.size(1)
+        seq_len = input_tensor.size(1)        
         for i in range(batch_size):
             # search backwards for non-zero element
             j = seq_len-1            
+            #print(input_tensor[i][j])
             while input_tensor[i][j] == 0. and j>=0:
                 j-=1
             li = np.arange(1, j+2, dtype=np.long)
