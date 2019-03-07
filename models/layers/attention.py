@@ -101,17 +101,17 @@ class SelfAttention(nn.Module): # adapted from https://github.com/huggingface/py
         mixed_query_layer = self.query(input_tensor)
         mixed_key_layer = self.key(input_tensor)
         mixed_value_layer = self.value(input_tensor)
-        print(mixed_key_layer.size())
+        #print(mixed_key_layer.size())
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
         key_layer = self.transpose_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
-        print(query_layer.size())
+        #print(query_layer.size())
         
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
-        print(attention_scores.size())
+        #print(attention_scores.size())
         
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
@@ -125,11 +125,11 @@ class SelfAttention(nn.Module): # adapted from https://github.com/huggingface/py
         
         context_layer = torch.matmul(attention_probs, value_layer)
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        print(context_layer.size())
-        print( context_layer.size()[:-2])
+        #print(context_layer.size())
+        #print( context_layer.size()[:-2])
         
         new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
-        print( new_context_layer_shape )
+        #print( new_context_layer_shape )
         context_layer = context_layer.view(*new_context_layer_shape)
         return context_layer
         

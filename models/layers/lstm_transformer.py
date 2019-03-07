@@ -29,6 +29,7 @@ class SelfAttentionLSTMEncoderLayer(nn.Module):
         self.dropout = nn.Dropout(drop_prob)        
      
     def forward(self, input_tensor, attention_mask, rnn_hidden): # input tensor is (batch_size, max_seq_len, rnn_hidden_dim)
+        #print("Forward in EncoderLayer ... input_tensor.size()={}".format(input_tensor.size()))        
         batch_size = input_tensor.size(0)
         # input_tensor is (batch_size, seq_len, input_dim)
         self_attention_tensor = self.self_attention(input_tensor, attention_mask)
@@ -55,12 +56,12 @@ class SelfAttentionLSTMEncoderLayer(nn.Module):
         else:
             return ( hidd, cell )        
 
-class SelfAttentionEncoderStack(nn.Module):
+class SelfAttentionLSTMEncoderStack(nn.Module):
     """
     
     """
     def __init__(self, n_layers, input_dim, rnn_hidden_dim, max_seq_len=512, rnn_layers=1, drop_prob=0.2, attention_probs_dropout_prob=0.2, num_attention_heads = 8):
-        super(SelfAttentionEncoderStack, self).__init__()
+        super(SelfAttentionLSTMEncoderStack, self).__init__()
         
         self.n_layers = n_layers
         self.input_dim = input_dim
@@ -75,10 +76,11 @@ class SelfAttentionEncoderStack(nn.Module):
         if n_layers == 1:
             self.stack = nn.ModuleList([base_layer])
         else: 
-            self.stack = nn.ModuleList([base_layer] + [SelfAttentionLSTMEncoderLayer(rnn_hidden_dim, rnn_hidden_dim, rnn_layers, drop_prob, attention_probs_dropout_prob, num_attention_heads) for _ in range(n_layers-1)])
+            self.stack = nn.ModuleList([base_layer] + [SelfAttentionLSTMEncoderLayer(rnn_hidden_dim*2, rnn_hidden_dim, rnn_layers, drop_prob, attention_probs_dropout_prob, num_attention_heads) for _ in range(n_layers-1)])
     
     def forward(self, input_tensor, attention_mask = None, return_all_layers = True, return_all_states = True):    
         batch_size = input_tensor.size(0)
+        seq_len = input_tensor.size(1)
         """
             return_all_states returns a tensor of n_layers containing either the last state(concat of fw and bw) or all outputs for all timesteps
             return_all_layers returns either all n_layers or just the final layer's output
@@ -87,7 +89,13 @@ class SelfAttentionEncoderStack(nn.Module):
             else:
                 output is (batch_size, n_layers_or_last_1, 1, rnn_hidden_dim*2)
         """
-        # todo XXX if attention_mask is none, all are treated
+        if attention_mask is None:# todo XXX if attention_mask is none, all are treated
+            attention_mask = torch.ones(batch_size, seq_len)
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+            #attention_mask = attention_mask.to(dtype=next(self.parameters()).dtype) # fp16 compatibility
+            attention_mask = (1.0 - attention_mask) * -10000.0
+        
+        # todo XXX check attention mask for last hidden state?
         
         # forward        
         output = None
@@ -99,30 +107,27 @@ class SelfAttentionEncoderStack(nn.Module):
             # unsqueeze to (batch_size, 1, seq_len, rnn_hidden_dim * 2)
             output_tensor = output_tensor.unsqueeze(1)
                         
-            if not return_all_states: # extract only last state, so generate a (batch_size, 1, 1, rnn_hidden_dim * 2) tensor
-                output_tensor = output_tensor[:,:,self.max_seq_len-1:self.max_seq_len,:] # don't drop dim 3, so slice with range                
+            if not return_all_states: # extract only last state, so generate a (batch_size, 1, 1, rnn_hidden_dim * 2) tensor                
+                output_tensor = output_tensor[:,:,seq_len-1:seq_len,:] # don't drop dim 3, so slice with range                                
             # else, output_tensor remains (batch_size, 1, seq_len, rnn_hidden_dim * 2)            
             # so, at this point, output_tensor is a (batch_size, 1, 1-or-seq_len, rnn_hidden_dim * 2)
             
-            if return_all_layers == True: # now, if we want all layers, we need to concat, otherwise just return last output_tensor as output
-                if output == None: # first layer
+            if return_all_layers == True: # now, if we want all layers, we need to concat, otherwise just return last output_tensor as output                 
+                if output is None: # first layer
                     output = output_tensor # (batch_size, 1, 1-or-seq_len, rnn_hidden_dim * 2)
                 else: # concat along dim 1 towards (batch_size, n_layers, 1-or-seq_len, rnn_hidden_dim * 2)
                     output = torch.cat((output, output_tensor),dim=1)
             else:
                 output = output_tensor # just return the (batch_size, 1, 1-or-seq_len, rnn_hidden_dim * 2)
-        
         return output
 
         
-        
 #testing
 if __name__ == '__main__':  
-    net = SelfAttentionEncoderStack(n_layers=3, input_dim=128, rnn_hidden_dim=256)
+    net = SelfAttentionLSTMEncoderStack(n_layers=3, input_dim=128, rnn_hidden_dim=256)
     
     #encoder_outputs = torch.Tensor(64,399,512).float().random_(0,1)
     #decoder_hidden = torch.Tensor(64,1,256).float().random_(0,1)
-    
     
     input_tensor = torch.Tensor(4, 10, 128).float().random_(0,1)
     attention_mask = torch.ones(4, 10)
@@ -143,6 +148,7 @@ if __name__ == '__main__':
     #extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype) # fp16 compatibility
     extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
     
-    out = net(input_tensor, attention_mask = extended_attention_mask, return_all_layers = True, return_all_states = True)            
+    out = net(input_tensor, attention_mask = extended_attention_mask, return_all_layers = False, return_all_states = False)            
+    print("_"*60)
     print(out.size())
      
