@@ -1,57 +1,95 @@
 # add package root
-import os, sys
-sys.path.insert(0, '..')
-
-import torch
-import torch.nn as nn
-
-from lstm_att.lstm import LSTMEncoderDecoderAtt
-
-# loading data
-#import util.loaders
-import util.biloaders
-
-#data_folder = os.path.join("..","..","data","cnndm","bpe","ready","cnndm.8K.bpe.model")
-data_folder = os.path.join("..","..","data","roen","ready","setimes.8K.bpe")
-
-batch_size = 32
-print("Loading data ...")
-#train_loader, valid_loader, test_loader, w2i, i2w = util.loaders.prepare_dataloaders(data_folder, batch_size, 1000, 5)
-train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = util.biloaders.prepare_dataloaders(data_folder, batch_size, 1000, 5)
-print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
-    len(train_loader.dataset.X),
-    len(valid_loader.dataset.X),
-    len(test_loader.dataset.X),
-    len(src_w2i)))
+import os
+from models.lstm_att.lstm import LSTMEncoderDecoderAtt
+import models.util.biloaders
+from models.util.trainer import train
+from models.lstm_att.my_model import LSTMAttnEncoderDecoder
 
 
-# x and y start with BOS (2), end with EOS(3), are padded with PAD (0) and unknown words are UNK (1)
-# example batch
-dataiter = iter(train_loader)
-# x_sequence, x_pos, y_sequence, y_pos = dataiter.next() # if pos loader is used
-x_sequence, y_sequence = dataiter.next()
-from pprint import pprint
-pprint(x_sequence[0])
-print(y_sequence[0]) # ex: tensor([    2, 12728, 49279, 13516,  4576, 25888,  1453,     1,  7975, 38296, ...])
+if __name__ == "__main__":
+    DATA_FOLDER = os.path.join("..", "..", "data", "roen", "setimes.8K.bpe")
+
+    batch_size = 10
+    min_seq_len = 5
+    max_seq_len = 10000
+
+    print("Loading data ...")
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = util.biloaders.prepare_dataloaders(
+        DATA_FOLDER, batch_size, 1000, 5)
+    print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
+        len(train_loader.dataset.X),
+        len(valid_loader.dataset.X),
+        len(test_loader.dataset.X),
+        len(src_w2i)))
+
+    # train_loader.dataset.X = train_loader.dataset.X[0:100]
+    # train_loader.dataset.y = train_loader.dataset.y[0:100]
+    # valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    # valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+
+    n_class = len(src_w2i)
+    n_emb_dim = 300
+    n_hidden = 256
+    n_lstm_units = 256
+
+    model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units)
+
+    epochs = 500
+    train(model, epochs, batch_size, n_class, train_loader, valid_loader, tgt_i2w)
 
 
-# Instantiate the model w/ hyperparams
-embedding_dim = 512 #128 #10 #100
-encoder_hidden_dim = 512 #256 #128 #256
-decoder_hidden_dim = 512 #encoder_hidden_dim*2 # for bidirectional LSTM in the encoder
-encoder_n_layers = 2
-decoder_n_layers = 1
-encoder_drop_prob = 0.3
-decoder_drop_prob = 0.3
-lr = 0.0005
 
-net = LSTMEncoderDecoderAtt(src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim, decoder_hidden_dim, encoder_n_layers, decoder_n_layers, encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr = lr, model_store_path = "../../train/lstm_att")
 
-print(net)
 
-# train
-#net.load_checkpoint("last")
-net.train(train_loader, valid_loader, test_loader, batch_size, patience = 20)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # embedding_dim = 512
+    # encoder_hidden_dim = 512
+    # decoder_hidden_dim = 512
+    # encoder_n_layers = 2
+    # decoder_n_layers = 1
+    # encoder_drop_prob = 0.3
+    # decoder_drop_prob = 0.3
+    # lr = 0.0005
+    #
+    # model = LSTMEncoderDecoderAtt(src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim,
+    #                             decoder_hidden_dim, encoder_n_layers, decoder_n_layers,
+    #                             encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr=lr,
+    #                             model_store_path="../../train/lstm_att")
+    #
+    # model.train(train_loader, valid_loader, test_loader, batch_size, patience=20)
 
 
 # run
