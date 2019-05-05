@@ -1,7 +1,7 @@
 # add package root
 import os
 from models.lstm_att.lstm import LSTMEncoderDecoderAtt
-import models.util.biloaders
+from models.util import biloaders
 from models.util.trainer import train
 from models.lstm_att.my_model import LSTMAttnEncoderDecoder
 
@@ -9,12 +9,12 @@ from models.lstm_att.my_model import LSTMAttnEncoderDecoder
 if __name__ == "__main__":
     DATA_FOLDER = os.path.join("..", "..", "data", "roen", "setimes.8K.bpe")
 
-    batch_size = 10
+    batch_size = 15
     min_seq_len = 5
     max_seq_len = 10000
 
     print("Loading data ...")
-    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = util.biloaders.prepare_dataloaders(
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = biloaders.prepare_dataloaders(
         DATA_FOLDER, batch_size, 1000, 5)
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
         len(train_loader.dataset.X),
@@ -22,20 +22,23 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_w2i)))
 
-    # train_loader.dataset.X = train_loader.dataset.X[0:100]
-    # train_loader.dataset.y = train_loader.dataset.y[0:100]
-    # valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    # valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    train_loader.dataset.X = train_loader.dataset.X[0:300]
+    train_loader.dataset.y = train_loader.dataset.y[0:300]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:300]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:300]
 
     n_class = len(src_w2i)
     n_emb_dim = 300
-    n_hidden = 256
-    n_lstm_units = 256
+    n_hidden = 128
+    n_lstm_units = 2
+    n_lstm_dropout = 0.2
+    n_dropout = 0.3
 
-    model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units)
+    model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout)
 
     epochs = 500
-    train(model, epochs, batch_size, n_class, train_loader, valid_loader, tgt_i2w)
+    lr = 0.1
+    train(model, epochs, lr, batch_size, n_class, train_loader, valid_loader, tgt_i2w)
 
 
 
