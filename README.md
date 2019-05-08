@@ -1,6 +1,6 @@
 # sustain-seq2seq
 
-##Folder structure:
+## Folder structure:
 
 #### Data folder
 In /data/ there are folders for each separate task. Each folder is self contained and has all the necessary files (including .py) that process that data into tensor files ready for input. It should contain .pt files (PyTorch tensors, split into train/dev/test) as well as source&target word2index/index2word dicts as jsons. 
