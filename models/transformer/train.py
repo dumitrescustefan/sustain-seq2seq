@@ -1,263 +1,162 @@
-import os, sys, json, time
-from tqdm import tqdm
-from pprint import pprint
+import os, sys
+sys.path.insert(0, '../..')
 
+from data.e2e.loader import loader
+from models.transformer.model import Transformer
 import torch
-import torch.nn.functional as F
-import torch.optim as optim
-import torch.utils.data
+import torch.nn as nn
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+import numpy as np
 
-from transformer.transformer import Transformer
-from transformer.dataset import CNNDMDataset, paired_collate_fn
-import transformer.config
-import transformer.optimizers
-
-# default parameters, edit here
-arg={}
-arg["data_folder"] = os.path.abspath("../../train/transformer")
-arg["batch_size"] = 64
-arg["d_model"] = 512 # "embedding" size, size of (almost) everything
-arg["d_inner_hid"] = 2048 # size of internal ffn hidden dim
-arg["d_k"] = 64 # size of keys    
-arg["d_v"] = 64 # size of values
-arg["n_head"] = 8 # number of attention heads   
-arg["n_layers"] = 3 # number of complete layers
-arg["n_warmup_steps"] = 4000 # number of steps with custom learning rate
-arg["dropout"] = 0.1
-#parser.add_argument('-embs_share_weight', action='store_true')
-#parser.add_argument('-proj_share_weight', action='store_true')
-arg["log"] = arg["data_folder"]
-arg["save_model"] = arg["data_folder"]
-arg["save_mode"] = "all" # or "best"
-arg["cuda"] = False # or true
-arg["label_smoothing"] = True
-
-# ##################
-
-def prepare_dataloaders(arg):
-    train_loader = torch.utils.data.DataLoader(
-        CNNDMDataset(arg["data_folder"], "train"),
-        num_workers=1,
-        batch_size=arg["batch_size"] ,
-        collate_fn=paired_collate_fn,
-        shuffle=True)
-
-    valid_loader = torch.utils.data.DataLoader(
-         CNNDMDataset(arg["data_folder"], "dev"),
-        num_workers=1,
-        batch_size=arg["batch_size"],
-        collate_fn=paired_collate_fn)
-    
-    test_loader = torch.utils.data.DataLoader(
-         CNNDMDataset(arg["data_folder"], "test"),
-        num_workers=1,
-        batch_size=arg["batch_size"],
-        collate_fn=paired_collate_fn)
-        
-    return train_loader, valid_loader, test_loader
-
-def cal_performance(pred, gold, smoothing=False):
-    ''' Apply label smoothing if needed '''
-
-    loss = cal_loss(pred, gold, smoothing)
-
-    pred = pred.max(1)[1]
-    gold = gold.contiguous().view(-1)
-    non_pad_mask = gold.ne(transformer.config.PAD)
-    n_correct = pred.eq(gold)
-    n_correct = n_correct.masked_select(non_pad_mask).sum().item()
-
-    return loss, n_correct
+data_folder = "../../data/e2e"
 
 
-def cal_loss(pred, gold, smoothing):
-    ''' Calculate cross entropy loss, apply label smoothing if needed. '''
+def _print_some_examples(model, loader, seq_len):
+    X, y = iter(loader).next()    
+    X = X[0:seq_len]
+    y = y[0:seq_len]
+    if model.cuda:
+        X = X.cuda()
+        y = y.cuda()
 
-    gold = gold.contiguous().view(-1)
+    out_valid = model.forward(X, y)
+    out_valid = torch.argmax(out_valid, dim=2)
 
-    if smoothing:
-        eps = 0.1
-        n_class = pred.size(1)
+    for i in range(seq_len): 
+        for j in range(len(X[i])):
+            token = str(X[i][j].item())
+            
+            if token not in tgt_i2w.keys():
+                print(src_i2w['1'] + " ", end='')
+            elif token == '3':
+                print(src_i2w['3'], end='')
+                break
+            else:
+                print(src_i2w[token] + " ", end='')
+        print()        
+        for j in range(len(y[i])):
+            token = str(y[i][j].item())
+            
+            if token not in tgt_i2w.keys():
+                print(tgt_i2w['1'] + " ", end='')
+            elif token == '3':
+                print(tgt_i2w['3'], end='')
+                break
+            else:
+                print(tgt_i2w[token] + " ", end='')
+        print()    
+        for j in range(len(out_valid[i])):
+            token = str(out_valid[i][j].item())
+            
+            if token not in tgt_i2w.keys():
+                print(tgt_i2w['1'] + " ", end='')
+            elif token == '3':
+                print(tgt_i2w['3'], end='')
+                break
+            else:
+                print(tgt_i2w[token] + " ", end='')
+        print()    
+        print("-"*40)
 
-        one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
-        one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
-        log_prb = F.log_softmax(pred, dim=1)
 
-        non_pad_mask = gold.ne(transformer.config.PAD)
-        loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
-    else:
-        loss = F.cross_entropy(pred, gold, ignore_index=transformer.config.PAD, reduction='sum')
-
-    return loss   
-    
-    
-def train_epoch(model, train_loader, optimizer, device, smoothing):
+def train(model, epochs, batch_size, n_class, train_loader, valid_loader, test_loader, tgt_i2w):    
     model.train()
-
-    total_loss = 0
-    n_word_total = 0
-    n_word_correct = 0
-
-    for batch in tqdm(train_loader, mininterval=2, desc='  - (Training)   ', leave=False):
-        # batch is a tuple of batch_size elements (64 x seq, 64 x pos, 64 y seq, 64 y pos) -> seq are padded ints (same len), pos are the positions of each element
+    criterion = nn.CrossEntropyLoss(reduction='sum')
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    n_data = len(train_loader.dataset.X)
+    n_dev_data = len(valid_loader.dataset.X)
+    
+    # training
+    for epoch in range(epochs):
+        model.train()
+        print("Epochs: {}/{}\n".format(epoch+1, epochs))
+        average_loss = 0
+        cnt = 0
         
-        # prepare data
-        src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)        
-        gold = tgt_seq[:, 1:] # gold cuts the first <s> from all Ys, is a Tensor
+        t = tqdm(train_loader, desc="Epoch "+str(epoch), unit="batches")        
+        for (x_batch, y_batch) in t:            
+            if model.cuda:
+                x_batch = x_batch.cuda()
+                y_batch = y_batch.cuda()
+                
+            #if batch_counter%100==0:
+            #    print("Batch: {}/{}".format(batch_counter, int(n_data/batch_size)))
+
+            optimizer.zero_grad()
+
+            output = model.forward(x_batch, y_batch)
+
+            loss = criterion(output.view(-1, n_class), y_batch.contiguous().view(-1))
+            average_loss += loss
+            
+            #if batch_counter%100==0:
+            #    print("Loss: {}".format(loss))
+            loss.backward()
+            optimizer.step()
+            
+            cnt+=1
+            t.set_postfix(loss=average_loss.data.item()/cnt) # print loss
+            #_print_some_examples(model, test_loader, 1)
+            
+
+        # deving
+        model.eval()
+        _print_some_examples(model, test_loader, batch_size)
+        dev_accuracy = 0
+
+        for x_dev_batch, y_dev_batch in valid_loader:
+            if model.cuda:
+                x_dev_batch = x_dev_batch.cuda()
+                y_dev_batch = y_dev_batch.cuda()
+            out_valid = model.forward(x_dev_batch, y_dev_batch).argmax(dim=2).view(-1)
+
+            dev_accuracy += accuracy_score(y_dev_batch.view(-1).cpu(), out_valid.cpu())
+
+        print("\nValidation Accuracy: {}".format(dev_accuracy/(n_dev_data/batch_size)))
+        print("Average loss: {}\n".format(average_loss/(n_data/batch_size)))
+
+
+def evaluate():
+    # to do
+    pass
+
+
+if __name__ == "__main__":
+    batch_size = 32
+    min_seq_len = 10
+    max_seq_len = 10000
+
+    print("Loading data ...")
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
+    
+    print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size {}\n".format(
+        len(train_loader.dataset.X),
+        len(valid_loader.dataset.X),
+        len(test_loader.dataset.X),
+        len(tgt_i2w)))
+
+    # train_loader.dataset.X = train_loader.dataset.X[0:500]
+    # train_loader.dataset.y = train_loader.dataset.y[0:500]
+    # valid_loader.dataset.X = valid_loader.dataset.X[0:500]
+    # valid_loader.dataset.y = valid_loader.dataset.y[0:500]
+
+    n_class = len(tgt_i2w)
+    # number of enc/dec
+    N = 1
+    # embedding size
+    d_model = 64
+    # feed_forward size
+    d_ff = 512
+    # number of heads
+    h = 4
+    # embedding size for keys
+    d_k = 16
+    # embedding size for values
+    d_v = 16
+    transformer = Transformer(N, d_model, d_ff, h, d_k, d_v, n_class, max_seq_len)
+
+    epochs = 10
+    train(transformer, epochs, batch_size, n_class, train_loader, valid_loader, test_loader, tgt_i2w)
         
-        # forward
-        optimizer.zero_grad()
-        pred = model(src_seq, src_pos, tgt_seq, tgt_pos)
-
-        # backward
-        loss, n_correct = cal_performance(pred, gold, smoothing=smoothing)
-        loss.backward()
-
-        # update parameters
-        optimizer.step_and_update_lr()
-
-        # note keeping
-        total_loss += loss.item()
-
-        non_pad_mask = gold.ne(transformer.config.PAD)
-        n_word = non_pad_mask.sum().item()
-        n_word_total += n_word
-        n_word_correct += n_correct
-
-    loss_per_word = total_loss/n_word_total
-    accuracy = n_word_correct/n_word_total
-    return loss_per_word, accuracy
-
-def eval_epoch(model, valid_loader, device):
-    model.eval()
-
-    total_loss = 0
-    n_word_total = 0
-    n_word_correct = 0
-
-    with torch.no_grad():
-        for batch in tqdm(valid_loader, mininterval=2, desc='  - (Validation) ', leave=False):
-
-            # prepare data
-            src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(device), batch)
-            gold = tgt_seq[:, 1:]
-
-            # forward
-            pred = model(src_seq, src_pos, tgt_seq, tgt_pos)
-            loss, n_correct = cal_performance(pred, gold, smoothing=False)
-
-            # note keeping
-            total_loss += loss.item()
-
-            non_pad_mask = gold.ne(transformer.config.PAD)
-            n_word = non_pad_mask.sum().item()
-            n_word_total += n_word
-            n_word_correct += n_correct
-
-    loss_per_word = total_loss/n_word_total
-    accuracy = n_word_correct/n_word_total
-    return loss_per_word, accuracy
-    
-def train(model, train_loader, valid_loader, test_loader, optimizer, device, arg):
-    
-    log_train_file = None
-    log_valid_file = None
-
-    if arg["log"]:
-        log_train_file = os.path.join(arg["log"], 'train.log')
-        log_valid_file = os.path.join(arg["log"], 'valid.log')
-
-        print('[Info] Training performance will be written to file: {} and {}'.format(log_train_file, log_valid_file))
-        with open(log_train_file, 'w') as log_tf, open(log_valid_file, 'w') as log_vf:
-            log_tf.write('epoch,loss,ppl,accuracy\n')
-            log_vf.write('epoch,loss,ppl,accuracy\n')
-
-    valid_accus = []
-    epoch_i = 0
-    while True:
-        epoch_i += 1
-        print('[ Epoch', epoch_i, ']')
-
-        start = time.time()
-        train_loss, train_accu = train_epoch(
-            model, train_loader, optimizer, device, smoothing=arg["label_smoothing"])
-        print('  - (Training)   ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, elapse: {elapse:3.3f} min'.format(
-                  ppl=math.exp(min(train_loss, 100)), accu=100*train_accu,
-                  elapse=(time.time()-start)/60))
-
-        start = time.time()
-        valid_loss, valid_accu = eval_epoch(model, valid_loader, device)
-        print('  - (Validation) ppl: {ppl: 8.5f}, accuracy: {accu:3.3f} %, elapse: {elapse:3.3f} min'.format(
-                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu,
-                    elapse=(time.time()-start)/60))
-
-        valid_accus += [valid_accu]
-
-        model_state_dict = model.state_dict()
-        checkpoint = {
-            'model': model_state_dict,
-            'settings': arg,
-            'epoch': epoch_i}
-
-        if arg["save_model"]:
-            if arg["save_mode"] == 'all':
-                model_name = arg["save_model"] + '_accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu)
-                torch.save(checkpoint, model_name)
-            elif arg["save_mode"] == 'best':
-                model_name = arg["save_model"] + '.chkpt'
-                if valid_accu >= max(valid_accus):
-                    torch.save(checkpoint, model_name)
-                    print('    - [Info] The checkpoint file has been updated.')
-
-        if log_train_file and log_valid_file:
-            with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
-                log_tf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
-                    epoch=epoch_i, loss=train_loss,
-                    ppl=math.exp(min(train_loss, 100)), accu=100*train_accu))
-                log_vf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
-                    epoch=epoch_i, loss=valid_loss,
-                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))    
-    
-def main():        
-    pprint(arg)    
-    
-    # load dataset
-    train_loader, valid_loader, test_loader = prepare_dataloaders(arg)
-    print("Data loaded. Instances: {} train / {} dev / {} test".format(len(train_loader), len(valid_loader), len(test_loader)))
-    
-    # prepare model
-    device = torch.device('cuda' if arg["cuda"]==True else 'cpu')
-    
-    
-    #print(len(train_loader.dataset.w2i)) # nice, we can index internal propertied of CNNDMDataset from the loader!
-    print()
-    transformer_network = Transformer(
-        len(train_loader.dataset.w2i), # src_vocab_size,
-        len(train_loader.dataset.w2i), # tgt_vocab_size, is equal to src size
-        train_loader.dataset.conf["max_sequence_len"], # max_token_seq_len, from the preprocess config
-        tgt_emb_prj_weight_sharing=True, # opt.proj_share_weight,
-        emb_src_tgt_weight_sharing=True, #opt.embs_share_weight,
-        d_k=arg["d_k"],
-        d_v=arg["d_v"],
-        d_model=arg["d_model"],
-        d_word_vec=arg["d_model"], # d_word_vec,
-        d_inner=arg["d_inner_hid"],
-        n_layers=arg["n_layers"],
-        n_head=arg["n_head"],
-        dropout=arg["dropout"]).to(device)
-    
-    print("Transformer model initialized.")
-    print()
-    
-    # train model    
-    optimizer = transformer.optimizers.ScheduledOptim(
-        optim.Adam(
-            filter(lambda x: x.requires_grad, transformer_network.parameters()), # apply only on parameters that require_grad
-            betas=(0.9, 0.98), eps=1e-09),
-        arg["d_model"], arg["n_warmup_steps"])
-
-    train(transformer_network, train_loader, valid_loader, test_loader, optimizer, device, arg)    
-    
-if __name__ == '__main__':
-    main()
+   
