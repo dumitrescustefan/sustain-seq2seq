@@ -6,10 +6,10 @@ sys.path.insert(0, '../..')
 from data.roen.loader import loader
 
 from models.lstm_attn.model import LSTMAttnEncoderDecoder
-
+from models.util.trainer import train
 
 if __name__ == "__main__":
-    data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
+    data_folder = os.path.join("..", "..", "data", "roen", "setimes.8K.bpe")
 
     batch_size = 15
     min_seq_len = 5
@@ -39,8 +39,8 @@ if __name__ == "__main__":
     model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout)
 
     epochs = 500
-    lr = 0.1
-    train(model, epochs, lr, batch_size, n_class, train_loader, valid_loader, tgt_i2w)
+    lr = 0.01
+    train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w)
 
 
 

@@ -8,7 +8,7 @@ from components import Attention
 class Transformer(nn.Module):
     def __init__(self, N, d_model, d_ff, h, d_k, d_v, n_class, voc_size):
         super(Transformer, self).__init__()
-        if(torch.cuda.is_available()):
+        if torch.cuda.is_available():
             print('Running on GPU.')
             self.cuda = True
             self.device = torch.device('cuda')            
@@ -42,8 +42,7 @@ class Transformer(nn.Module):
             return torch.Tensor(pos_embeddings).cuda()
         else:
             return torch.Tensor(pos_embeddings)
-        
-        
+
     def forward(self, x, y):
         x_seq_len = x.shape[1]
         y_seq_len = y.shape[1]
