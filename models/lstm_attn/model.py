@@ -9,7 +9,7 @@ class Encoder(nn.Module):
         self.lstm = nn.LSTM(n_emb_dim, n_hidden, n_lstm_units, dropout=n_lstm_dropout,
                             bidirectional=True, batch_first=True)
 
-        self.to(self.device)
+        self.to(device)
 
     def forward(self, input):
         embeddings = self.embedding_layer(input)
@@ -31,7 +31,7 @@ class AttnDecoder(nn.Module):
         self.softmax = nn.Softmax(dim=1)
         self.output_layer = nn.Linear(n_hidden * 2, n_class)
 
-        self.to(self.device)
+        self.to(device)
 
     def _calculate_context_vector(self, state_h, enc_output):
         state_h = state_h.permute(1, 0, 2).reshape(enc_output.shape[0], 1, -1).expand(-1, enc_output.shape[1], -1)
