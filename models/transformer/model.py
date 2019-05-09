@@ -8,6 +8,9 @@ from components import Attention
 class Transformer(nn.Module):
     def __init__(self, N, d_model, d_ff, h, d_k, d_v, n_class, voc_size):
         super(Transformer, self).__init__()
+
+        self.N = N
+
         if torch.cuda.is_available():
             print('Running on GPU.')
             self.cuda = True
@@ -59,6 +62,20 @@ class Transformer(nn.Module):
         output = self.linear(decoder_data)
 
         return output
+
+    def eval(self):
+        super().eval()
+
+        for i in range(self.N):
+            self.encoder_units[i].eval()
+            self.decoder_units[i].eval()
+
+    def train(self, mode=True):
+        super().train(mode)
+
+        for i in range(self.N):
+            self.encoder_units[i].train(mode)
+            self.decoder_units[i].train(mode)
 
 
 class Encoder(nn.Module):

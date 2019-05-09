@@ -7,7 +7,7 @@ import os
 if __name__ == "__main__":
     data_folder = os.path.join("..", "..", "data", "roen", "setimes.8K.bpe")
 
-    batch_size = 32
+    batch_size = 25
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -20,10 +20,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(tgt_i2w)))
 
-    # train_loader.dataset.X = train_loader.dataset.X[0:1000]
-    # train_loader.dataset.y = train_loader.dataset.y[0:1000]
-    # valid_loader.dataset.X = valid_loader.dataset.X[0:1000]
-    # valid_loader.dataset.y = valid_loader.dataset.y[0:1000]
+    train_loader.dataset.X = train_loader.dataset.X[0:100]
+    train_loader.dataset.y = train_loader.dataset.y[0:100]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
 
     n_class = len(src_i2w)
     # number of enc/dec
@@ -40,8 +40,9 @@ if __name__ == "__main__":
     d_v = 32
     transformer = Transformer(N, d_model, d_ff, h, d_k, d_v, n_class, max_seq_len)
 
-    epochs = 10
+    epochs = 1
     lr = 0.01
-    train(transformer, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w)
+    model_path = os.path.join("..", "..", "train", "transformer.ckpt")
+    train(transformer, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path)
         
    

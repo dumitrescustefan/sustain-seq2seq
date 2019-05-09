@@ -46,3 +46,16 @@ class Attention(nn.Module):
         z = self.linear(z)
 
         return z
+
+    def eval(self):
+        super().eval()
+
+        for i in range(self.h):
+            self.heads[i].eval()
+
+    def train(self, mode=True):
+        super().train(mode)
+
+        for i in range(self.h):
+            self.heads[i].train(mode)
+

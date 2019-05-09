@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
+import os
 
 
 def _print_some_examples(model, loader, seq_len, src_i2w, tgt_i2w):
@@ -52,7 +53,7 @@ def _print_some_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("-" * 40)
 
 
-def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w):
+def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
     model.train()
     criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -113,3 +114,7 @@ def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, te
 
         print("\nValidation Accuracy: {}".format(dev_accuracy / (n_dev_data / batch_size)))
         print("Average loss: {}\n".format(average_loss / (n_data / batch_size)))
+
+    print("Saving the model...")
+    torch.save(model, model_path)
+    print("Model saved successfully")
