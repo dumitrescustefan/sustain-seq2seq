@@ -5,6 +5,14 @@ from tqdm import tqdm
 import os
 
 
+def get_freer_gpu():
+    import os
+    import numpy as np
+    os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp')
+    memory_available = [int(x.split()[2]) for x in open('tmp', 'r').readlines()]
+    return int(np.argmax(memory_available))
+
+
 def _print_some_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     X_sample, y_sample = iter(loader).next()
     X_sample = X_sample[0:seq_len]
