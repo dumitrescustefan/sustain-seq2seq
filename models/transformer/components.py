@@ -59,3 +59,9 @@ class Attention(nn.Module):
         for i in range(self.h):
             self.heads[i].train(mode)
 
+    def to(self, device):
+        super().to(device)
+
+        for i in range(self.h):
+            self.heads[i].to(device)
+

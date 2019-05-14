@@ -77,6 +77,13 @@ class Transformer(nn.Module):
             self.encoder_units[i].train(mode)
             self.decoder_units[i].train(mode)
 
+    def to(self, device):
+        super().to(device)
+
+        for i in range(self.N):
+            self.encoder_units[i].to(device)
+            self.decoder_units[i].to(device)
+
 
 class Encoder(nn.Module):
     def __init__(self, d_model, d_ff, h, d_k, d_v, device):
@@ -87,6 +94,7 @@ class Encoder(nn.Module):
         self.linear1 = nn.Linear(d_model, d_ff)
         self.linear2 = nn.Linear(d_ff, d_model)
         self.batch_norm2 = nn.BatchNorm1d(d_model)
+
         self.to(device)
 
     def forward(self, input):
