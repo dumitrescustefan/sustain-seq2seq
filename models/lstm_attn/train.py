@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
+    batch_size = 28
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -41,15 +41,16 @@ if __name__ == "__main__":
 
     n_class = len(tgt_w2i)
     n_emb_dim = 300
-    n_hidden = 128
+    n_hidden = 512
     n_lstm_units = 2
     n_lstm_dropout = 0.2
     n_dropout = 0.3
-
+    
     model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout)
 
     # ######################################################################
-    max_epochs = 100    
+    resume = True
+    max_epochs = 100        
     model_path = os.path.join("..", "..", "train", "lstm_attn")
     train(model, 
           src_i2w, 
@@ -58,7 +59,7 @@ if __name__ == "__main__":
           valid_loader, 
           test_loader,                          
           model_store_path=model_path, 
-          resume=False, 
+          resume=True, 
           max_epochs=max_epochs, 
           patience=10, 
           lr=0.0005)

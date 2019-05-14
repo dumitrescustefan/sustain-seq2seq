@@ -1,3 +1,4 @@
+import os
 import torch.nn as nn
 import torch
 
@@ -88,3 +89,30 @@ class LSTMAttnEncoderDecoder(nn.Module):
         output = self.decoder.forward(y, enc_output, enc_states)
 
         return output
+        
+    def load_checkpoint(self, folder, extension):        
+        filename = os.path.join(folder,"checkpoint."+extension)        
+        print("Loading model {} ...".format(filename))
+        if not os.path.exists(filename):
+            print("\t Model file not found, not loading anything!")
+            return {}
+            
+        checkpoint = torch.load(filename)        
+        self.encoder.load_state_dict(checkpoint["encoder_state_dict"])
+        self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
+        
+        self.encoder.to(self.device)
+        self.decoder.to(self.device)
+        return checkpoint["extra"]
+        
+        
+    def save_checkpoint(self, folder, extension, extra={}):   
+        filename = os.path.join(folder,"checkpoint."+extension)        
+        checkpoint = {}
+        checkpoint["encoder_state_dict"] = self.encoder.state_dict()
+        checkpoint["decoder_state_dict"] = self.decoder.state_dict()            
+        checkpoint["extra"] = extra
+        torch.save(checkpoint, filename)    
+
+    
+        

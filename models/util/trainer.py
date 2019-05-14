@@ -73,9 +73,6 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_object = Log(log_path, clear=True)
     print("Working in folder [{}]".format(model_store_path))
     
-    if resume: # load checkpoint         
-        model.load_checkpoint(model_store_path) # TODO implementare
-    
     criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     n_data = len(train_loader.dataset.X)
@@ -85,15 +82,25 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     current_epoch = 0
     current_patience = patience
     best_accuracy = 0.
+
+    if resume: # load checkpoint         
+        extra_variables = model.load_checkpoint(model_store_path, extension="best")                
+        if "epoch" in extra_variables:
+            current_epoch = extra_variables["epoch"]                
+        print("Resuming from epoch {}".format(current_epoch))
+        load_optimizer_checkpoint (optimizer, model.cuda, model_store_path, extension="best")
     
     while current_patience>0 and current_epoch<max_epochs:
         print()
         
         # train
         model.train()
-        average_loss = 0        
+        total_loss = 0        
+        log_average_loss = 0
         t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="batches")
+        
         for batch_index, (x_batch, y_batch) in enumerate(t):
+        #for x_batch, y_batch in train_loader:
             if model.cuda:
                 x_batch = x_batch.cuda()
                 y_batch = y_batch.cuda()
@@ -106,15 +113,18 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             # x_batch and y_batch shapes: [bs, padded_sequence]
             output = model.forward(x_batch, y_in_batch)
             # output shape: [bs, padded_sequence, n_class]
-            
-            # TODO andrei , explica functia asta dpdv al marimilor. daca e nevoie scoate in afara operatiile
-            loss = criterion(output.view(-1, n_class), y_out_batch.contiguous().flatten())            
+            #print(output.size())
+            #print(output.view(-1, n_class).size())
+            #print(y_out_batch.size())
+            #input("Asd")
+            loss = criterion(output.view(-1, n_class), y_out_batch.contiguous().flatten())                        
             loss.backward()
             optimizer.step()
             
-            average_loss += loss
-            log_average_loss = average_loss.data.item() / (batch_index+1)
+            total_loss += loss.data.item()
+            log_average_loss = total_loss / (batch_index+1)
             t.set_postfix(loss=log_average_loss) 
+            
             
         # dev
         if valid_loader != None:
@@ -140,12 +150,33 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             
             if log_dev_accuracy > best_accuracy:
                 print("\t Best accuracy = {}".format(log_dev_accuracy))
-                #model.save_checkpoint(model_store_path,"best")
-            
+                model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
+                save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+                
             _print_some_examples(model, test_loader, batch_size, src_i2w, tgt_i2w)            
             
         else: # disable patience if no dev provided and always save model 
             current_patience = patience
-            model.save_checkpoint(model_store_path,"best") #torch.save(model, model_path)
-    
+            model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
+            save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+            
         current_epoch += 1
+
+def save_optimizer_checkpoint (optimizer, folder, extension):
+    filename = os.path.join(folder,"checkpoint_optimizer."+extension)
+    #print("Saving optimizer parameters to {} ...".format(filename))    
+    torch.save(optimizer.state_dict(), filename)    
+
+def load_optimizer_checkpoint (optimizer, cuda, folder, extension):
+    filename = os.path.join(folder,"checkpoint_optimizer."+extension)
+    if not os.path.exists(filename):
+        print("\tOptimizer parameters not found, skipping initialization")
+        return
+    print("Loading optimizer parameters from {} ...".format(filename))    
+    optimizer.load_state_dict(torch.load(filename))
+    if cuda:
+        for state in optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, torch.Tensor):
+                    state[k] = v.cuda()
+    
