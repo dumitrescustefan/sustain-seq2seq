@@ -1,6 +1,6 @@
-import os
 import torch.nn as nn
 import torch
+import os
 
 
 class Encoder(nn.Module):
@@ -21,13 +21,20 @@ class Encoder(nn.Module):
 
 
 class AttnDecoder(nn.Module):
-    def __init__(self, n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout, device):
+    def __init__(self, n_class, n_emb_dim, n_hidden, n_lstm_units_enc, n_lstm_units_dec, n_lstm_dropout, n_dropout, device):
         super(AttnDecoder, self).__init__()
+        self.n_lstm_units_dec = n_lstm_units_dec
+        self.n_hidden = n_hidden
+
         self.embedding_layer = nn.Embedding(n_class, n_emb_dim)
-        self.attn1 = nn.Linear(n_hidden*n_lstm_units * 2 + n_hidden * 2, n_hidden * 4)
+
+        self.h_map_layer = nn.Linear(n_lstm_units_enc * n_hidden * 2, n_lstm_units_dec * n_hidden * 2)
+        self.c_map_layer = nn.Linear(n_lstm_units_enc * n_hidden * 2, n_lstm_units_dec * n_hidden * 2)
+
+        self.attn1 = nn.Linear(n_hidden*n_lstm_units_dec * 2 + n_hidden * 2, n_hidden * 4)
         self.attn2 = nn.Linear(n_hidden * 4, 1)
         self.dropout = nn.Dropout(n_dropout)
-        self.lstm = nn.LSTM(n_emb_dim + n_hidden * 2, n_hidden, n_lstm_units, dropout=n_lstm_dropout,
+        self.lstm = nn.LSTM(n_emb_dim + n_hidden * 2, n_hidden, n_lstm_units_dec, dropout=n_lstm_dropout,
                             bidirectional=True, batch_first=True)
         self.softmax = nn.Softmax(dim=1)
         self.output_layer = nn.Linear(n_hidden * 2, n_class)
@@ -47,7 +54,17 @@ class AttnDecoder(nn.Module):
         return torch.sum(context_vector, 1)
 
     def forward(self, input, enc_output, enc_states):
+        batch_size = input.shape[0]
+
         embeddings = self.embedding_layer(input)
+
+        enc_states = (enc_states[0].permute(1, 0, 2).reshape(batch_size, -1),
+                      enc_states[1].permute(1, 0, 2).reshape(batch_size, -1))
+
+        enc_states = (self.h_map_layer(enc_states[0]), self.c_map_layer(enc_states[1]))
+
+        enc_states = (enc_states[0].reshape(batch_size, self.n_lstm_units_dec * 2, self.n_hidden).permute(1, 0, 2),
+                      enc_states[1].reshape(batch_size, self.n_lstm_units_dec * 2, self.n_hidden).permute(1, 0, 2))
 
         context_vector = self._calculate_context_vector(enc_states[0], enc_output)
         lstm_input = torch.cat((embeddings[:, 0, :], context_vector), dim=1).reshape(enc_output.shape[0], 1, -1)
@@ -65,7 +82,7 @@ class AttnDecoder(nn.Module):
 
 
 class LSTMAttnEncoderDecoder(nn.Module):
-    def __init__(self, n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout):
+    def __init__(self, n_class, n_emb_dim, n_hidden, n_lstm_units_enc, n_lstm_units_dec, n_lstm_dropout, n_dropout):
         super(LSTMAttnEncoderDecoder, self).__init__()
 
         if torch.cuda.is_available():
@@ -77,8 +94,9 @@ class LSTMAttnEncoderDecoder(nn.Module):
             self.cuda = False
             self.device = torch.device('cpu')
 
-        self.encoder = Encoder(n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, self.device)
-        self.decoder = AttnDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout, self.device)
+        self.encoder = Encoder(n_class, n_emb_dim, n_hidden, n_lstm_units_enc, n_lstm_dropout, self.device)
+        self.decoder = AttnDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units_enc, n_lstm_units_dec,
+                                   n_lstm_dropout, n_dropout, self.device)
 
         if self.cuda:
             self.to(self.device)
@@ -89,30 +107,29 @@ class LSTMAttnEncoderDecoder(nn.Module):
         output = self.decoder.forward(y, enc_output, enc_states)
 
         return output
-        
-    def load_checkpoint(self, folder, extension):        
-        filename = os.path.join(folder,"checkpoint."+extension)        
+
+    def load_checkpoint(self, folder, extension):
+        filename = os.path.join(folder, "checkpoint." + extension)
         print("Loading model {} ...".format(filename))
         if not os.path.exists(filename):
             print("\t Model file not found, not loading anything!")
             return {}
-            
-        checkpoint = torch.load(filename)        
+
+        checkpoint = torch.load(filename)
         self.encoder.load_state_dict(checkpoint["encoder_state_dict"])
-        self.decoder.load_state_dict(checkpoint["decoder_state_dict"])        
-        
+        self.decoder.load_state_dict(checkpoint["decoder_state_dict"])
+
         self.encoder.to(self.device)
         self.decoder.to(self.device)
         return checkpoint["extra"]
-        
-        
-    def save_checkpoint(self, folder, extension, extra={}):   
-        filename = os.path.join(folder,"checkpoint."+extension)        
+
+    def save_checkpoint(self, folder, extension, extra={}):
+        filename = os.path.join(folder, "checkpoint." + extension)
         checkpoint = {}
         checkpoint["encoder_state_dict"] = self.encoder.state_dict()
-        checkpoint["decoder_state_dict"] = self.decoder.state_dict()            
+        checkpoint["decoder_state_dict"] = self.decoder.state_dict()
         checkpoint["extra"] = extra
-        torch.save(checkpoint, filename)    
+        torch.save(checkpoint, filename)
 
     
         

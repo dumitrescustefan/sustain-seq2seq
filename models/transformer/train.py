@@ -21,10 +21,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    # train_loader.dataset.X = train_loader.dataset.X[0:100]
-    # train_loader.dataset.y = train_loader.dataset.y[0:100]
-    # valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    # valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    train_loader.dataset.X = train_loader.dataset.X[0:100]
+    train_loader.dataset.y = train_loader.dataset.y[0:100]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     d_k = 64
     # embedding size for values
     d_v = 64
-    transformer = Transformer(N, d_model, d_ff, h, d_k, d_v, n_class, max_seq_len)
+    model = Transformer(N, d_model, d_ff, h, d_k, d_v, n_class, max_seq_len)
 
     # ######################################################################
     max_epochs = 100    

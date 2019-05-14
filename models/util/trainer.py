@@ -5,6 +5,7 @@ from models.util.log import Log
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 
+
 def get_freer_gpu():  
     try:    
         import numpy as np
@@ -14,6 +15,7 @@ def get_freer_gpu():
     except:
         print("Warning: Could execute 'nvidia-smi', default GPU selection is id=0")
         return 0
+
 
 def _print_some_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     X_sample, y_sample = iter(loader).next()
@@ -62,9 +64,11 @@ def _print_some_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print()
         print("-" * 40)
 
+
 #def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
-def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None, resume=False, max_epochs=100000, patience=10, lr=0.0005):    
-    if model_store_path == None: # saves model in the same folder as this script
+def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
+          resume=False, max_epochs=100000, patience=10, lr=0.0005):
+    if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
         os.makedirs(model_store_path)
@@ -90,7 +94,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         print("Resuming from epoch {}".format(current_epoch))
         load_optimizer_checkpoint (optimizer, model.cuda, model_store_path, extension="best")
     
-    while current_patience>0 and current_epoch<max_epochs:
+    while current_patience > 0 and current_epoch < max_epochs:
         print()
         
         # train
@@ -124,10 +128,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             total_loss += loss.data.item()
             log_average_loss = total_loss / (batch_index+1)
             t.set_postfix(loss=log_average_loss) 
-            
-            
+
         # dev
-        if valid_loader != None:
+        if valid_loader is not None:
             model.eval()            
             dev_accuracy = 0
             
@@ -162,13 +165,15 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             
         current_epoch += 1
 
+
 def save_optimizer_checkpoint (optimizer, folder, extension):
-    filename = os.path.join(folder,"checkpoint_optimizer."+extension)
+    filename = os.path.join(folder, "checkpoint_optimizer."+extension)
     #print("Saving optimizer parameters to {} ...".format(filename))    
     torch.save(optimizer.state_dict(), filename)    
 
+
 def load_optimizer_checkpoint (optimizer, cuda, folder, extension):
-    filename = os.path.join(folder,"checkpoint_optimizer."+extension)
+    filename = os.path.join(folder, "checkpoint_optimizer."+extension)
     if not os.path.exists(filename):
         print("\tOptimizer parameters not found, skipping initialization")
         return

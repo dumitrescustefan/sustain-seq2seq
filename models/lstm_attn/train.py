@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 28
+    batch_size = 32
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    #train_loader.dataset.X = train_loader.dataset.X[0:300]
-    #train_loader.dataset.y = train_loader.dataset.y[0:300]
-    #valid_loader.dataset.X = valid_loader.dataset.X[0:300]
-    #valid_loader.dataset.y = valid_loader.dataset.y[0:300]
+    train_loader.dataset.X = train_loader.dataset.X[0:300]
+    train_loader.dataset.y = train_loader.dataset.y[0:300]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:300]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:300]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -42,11 +42,12 @@ if __name__ == "__main__":
     n_class = len(tgt_w2i)
     n_emb_dim = 300
     n_hidden = 512
-    n_lstm_units = 2
+    n_lstm_units_enc = 2
+    n_lstm_units_dec = 3
     n_lstm_dropout = 0.2
     n_dropout = 0.3
     
-    model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units, n_lstm_dropout, n_dropout)
+    model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units_enc, n_lstm_units_dec, n_lstm_dropout, n_dropout)
 
     # ######################################################################
     resume = True
