@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
+    batch_size = 15
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -40,14 +40,18 @@ if __name__ == "__main__":
     # MODEL TRAINING #######################################################
 
     n_class = len(tgt_w2i)
-    n_emb_dim = 300
-    n_hidden = 512
-    n_lstm_units_enc = 2
-    n_lstm_units_dec = 3
-    n_lstm_dropout = 0.2
-    n_dropout = 0.3
+    emb_dim = 300
+    hidden_dim = 64
+    lstm_units_enc = 3
+    lstm_units_dec = 2
+    lstm_dropout = 0.2
+    dropout = 0.3
     
-    model = LSTMAttnEncoderDecoder(n_class, n_emb_dim, n_hidden, n_lstm_units_enc, n_lstm_units_dec, n_lstm_dropout, n_dropout)
+    model = LSTMAttnEncoderDecoder(n_class,
+                                   emb_dim,
+                                   hidden_dim,
+                                   lstm_units_enc, lstm_units_dec,
+                                   lstm_dropout, dropout)
 
     # ######################################################################
     resume = True
@@ -63,7 +67,7 @@ if __name__ == "__main__":
           resume=True, 
           max_epochs=max_epochs, 
           patience=10, 
-          lr=0.0005)
+          lr=0.01)
     
 
 

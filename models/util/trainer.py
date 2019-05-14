@@ -17,7 +17,7 @@ def get_freer_gpu():
         return 0
 
 
-def _print_some_examples(model, loader, seq_len, src_i2w, tgt_i2w):
+def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     X_sample, y_sample = iter(loader).next()
     X_sample = X_sample[0:seq_len]
     y_sample = y_sample[0:seq_len]
@@ -79,8 +79,6 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     
     criterion = nn.CrossEntropyLoss(reduction='sum')
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    n_data = len(train_loader.dataset.X)
-    n_dev_data = len(valid_loader.dataset.X)
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
@@ -99,8 +97,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         # train
         model.train()
-        total_loss = 0        
-        log_average_loss = 0
+        total_loss = 0
         t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="batches")
         
         for batch_index, (x_batch, y_batch) in enumerate(t):
@@ -109,7 +106,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 x_batch = x_batch.cuda()
                 y_batch = y_batch.cuda()
 
-            y_in_batch = y_batch[:, :-1] 
+            y_in_batch = y_batch[:, :-1]
             y_out_batch = y_batch[:, 1:]
 
             optimizer.zero_grad()
@@ -156,7 +153,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
                 
-            _print_some_examples(model, test_loader, batch_size, src_i2w, tgt_i2w)            
+            _print_examples(model, test_loader, batch_size, src_i2w, tgt_i2w)
             
         else: # disable patience if no dev provided and always save model 
             current_patience = patience
