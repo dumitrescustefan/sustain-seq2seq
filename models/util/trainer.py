@@ -19,6 +19,7 @@ def get_freer_gpu():
 
 def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     X_sample, y_sample = iter(loader).next()
+    seq_len = min(seq_len,len(X_sample))
     X_sample = X_sample[0:seq_len]
     y_sample = y_sample[0:seq_len]
     if model.cuda:
@@ -153,7 +154,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
                 
-            _print_examples(model, test_loader, batch_size, src_i2w, tgt_i2w)
+            _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
             
         else: # disable patience if no dev provided and always save model 
             current_patience = patience

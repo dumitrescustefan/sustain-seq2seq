@@ -1,3 +1,4 @@
+import os
 import torch.nn as nn
 import torch
 import numpy as np
@@ -83,6 +84,33 @@ class Transformer(nn.Module):
         for i in range(self.N):
             self.encoder_units[i].to(device)
             self.decoder_units[i].to(device)
+
+    def load_checkpoint(self, folder, extension):
+        filename = os.path.join(folder, "checkpoint." + extension)
+        print("Loading model {} ...".format(filename))
+        if not os.path.exists(filename):
+            print("\t Model file not found, not loading anything!")
+            return {}
+
+        checkpoint = torch.load(filename)        
+        self.load_state_dict(checkpoint["self_state_dict"])
+        for i in range(self.N):
+            self.encoder_units[i].load_state_dict(checkpoint["encoder"][i])
+            self.decoder_units[i].load_state_dict(checkpoint["decoder"][i])        
+        self.to(self.device)
+        return checkpoint["extra"]
+
+    def save_checkpoint(self, folder, extension, extra={}):
+        filename = os.path.join(folder, "checkpoint." + extension)
+        checkpoint = {}        
+        checkpoint["self_state_dict"] = self.state_dict()
+        checkpoint["encoder"] = []
+        checkpoint["decoder"] = []
+        for i in range(self.N):
+            checkpoint["encoder"].append(self.encoder_units[i].state_dict())
+            checkpoint["decoder"].append(self.decoder_units[i].state_dict())            
+        checkpoint["extra"] = extra
+        torch.save(checkpoint, filename)
 
 
 class Encoder(nn.Module):

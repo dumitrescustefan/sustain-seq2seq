@@ -2,7 +2,7 @@
 import os, sys
 sys.path.insert(0, '../..')
 
-from models.lstm_attn.model import LSTMAttnEncoderDecoder
+from models.lstm_attn.model import LSTMEncoderDecoderWithAdditiveAttention
 from models.util.trainer import train, get_freer_gpu
 import torch
 
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 15
+    batch_size = 10
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -38,22 +38,27 @@ if __name__ == "__main__":
     # ######################################################################
     
     # MODEL TRAINING #######################################################
-
-    n_class = len(tgt_w2i)
-    emb_dim = 300
-    hidden_dim = 64
-    lstm_units_enc = 3
-    lstm_units_dec = 2
-    lstm_dropout = 0.2
-    dropout = 0.3
     
-    model = LSTMAttnEncoderDecoder(n_class,
-                                   emb_dim,
-                                   hidden_dim,
-                                   lstm_units_enc, lstm_units_dec,
-                                   lstm_dropout, dropout)
-
-    # ######################################################################
+    model = LSTMEncoderDecoderWithAdditiveAttention(
+                enc_vocab_size = len(src_w2i),
+                enc_emb_dim = 300,
+                enc_hidden_dim = 512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers = 2,
+                enc_dropout = 0.2,
+                enc_lstm_dropout = 0.2, 
+                dec_input_dim = 256, # must be equal to enc_hidden_dim
+                dec_emb_dim = 300,
+                dec_hidden_dim = 256,
+                dec_num_layers = 2,
+                dec_dropout = 0.2,
+                dec_lstm_dropout = 0.2,
+                dec_vocab_size = len(tgt_w2i),
+                dec_transfer_hidden = True)
+    
+    print("_"*80+"\n")
+    print(model)
+    print("_"*80+"\n")
+    
     resume = True
     max_epochs = 100        
     model_path = os.path.join("..", "..", "train", "lstm_attn")
@@ -63,70 +68,10 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader, 
           test_loader,                          
-          model_store_path=model_path, 
-          resume=True, 
-          max_epochs=max_epochs, 
-          patience=10, 
-          lr=0.01)
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # embedding_dim = 512
-    # encoder_hidden_dim = 512
-    # decoder_hidden_dim = 512
-    # encoder_n_layers = 2
-    # decoder_n_layers = 1
-    # encoder_drop_prob = 0.3
-    # decoder_drop_prob = 0.3
-    # lr = 0.0005
-    #
-    # model = LSTMEncoderDecoderAtt(src_w2i, src_i2w, tgt_w2i, tgt_i2w, embedding_dim, encoder_hidden_dim,
-    #                             decoder_hidden_dim, encoder_n_layers, decoder_n_layers,
-    #                             encoder_drop_prob=encoder_drop_prob, decoder_drop_prob=decoder_drop_prob, lr=lr,
-    #                             model_store_path="../../train/lstm_att")
-    #
-    # model.train(train_loader, valid_loader, test_loader, batch_size, patience=20)
-
-
-# run
-#net.load_checkpoint("best")
-#input = [ [4,5,6,7,8,9], [9,8,7,6] ]
-#output = net.run(input)
-#output = net.run(valid_loader, batch_size)
-#print(output)
+          model_store_path = model_path, 
+          resume = False, 
+          max_epochs = max_epochs, 
+          patience = 10, 
+          lr = 0.001)
+          
+    # ######################################################################

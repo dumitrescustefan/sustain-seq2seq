@@ -1,3 +1,7 @@
+# add package root
+import os, sys
+sys.path.insert(0, '../..')
+
 from models.transformer.model import Transformer
 from models.util.trainer import train, get_freer_gpu
 import os
@@ -7,7 +11,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
+    batch_size = 24
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -21,10 +25,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    train_loader.dataset.X = train_loader.dataset.X[0:100]
-    train_loader.dataset.y = train_loader.dataset.y[0:100]
-    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    #train_loader.dataset.X = train_loader.dataset.X[0:500]
+    #train_loader.dataset.y = train_loader.dataset.y[0:500]
+    #valid_loader.dataset.X = valid_loader.dataset.X[0:500]
+    #valid_loader.dataset.y = valid_loader.dataset.y[0:500]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -59,7 +63,7 @@ if __name__ == "__main__":
           valid_loader, 
           test_loader,                          
           model_store_path=model_path, 
-          resume=False, 
+          resume=True, 
           max_epochs=max_epochs, 
           patience=10, 
           lr=0.0005)
