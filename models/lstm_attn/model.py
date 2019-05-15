@@ -48,13 +48,14 @@ class Encoder(nn.Module):
 
 
 class AttnDecoder(nn.Module):
-    def __init__(self, n_class, emb_dim, hidden_dim, lstm_units_dec, lstm_dropout, dropout, device):
+    def __init__(self, n_class, emb_dim, input_size, hidden_dim, lstm_units_dec, lstm_dropout, dropout, device):
         """
         Creates an Decoder with attention.
 
         Args:
             n_class (int): Number of classes/ Vocabulary size.
             emb_dim (int): Embeddings dimension.
+            input_size (int): Input size.
             hidden_dim (int): LSTM hidden layers dimension.
             lstm_units_dec (int): Number of LSTM units for the decoder in a lstm layer.
             lstm_dropout (float): LSTM dropout.
@@ -67,12 +68,12 @@ class AttnDecoder(nn.Module):
         self.embedding = nn.Embedding(n_class, emb_dim)
 
         # The attention layers. We use a hidden layer of dimension 4*hidden_dim.
-        self.attn1 = nn.Linear(hidden_dim * lstm_units_dec + hidden_dim * 2, hidden_dim * 4)
+        self.attn1 = nn.Linear(hidden_dim * lstm_units_dec + input_size, hidden_dim * 4)
         self.attn2 = nn.Linear(hidden_dim * 4, 1)
         self.dropout = nn.Dropout(dropout)
 
         # The decoder lstm layer is unidirectional.
-        self.lstm = nn.LSTM(emb_dim + hidden_dim * 2, hidden_dim, lstm_units_dec, dropout=lstm_dropout, batch_first=True)
+        self.lstm = nn.LSTM(emb_dim + input_size, hidden_dim, lstm_units_dec, dropout=lstm_dropout, batch_first=True)
 
         self.output_linear = nn.Linear(hidden_dim, n_class)
 
@@ -207,7 +208,8 @@ class LSTMAttnEncoderDecoder(nn.Module):
         self.lstm_units_dec = lstm_units_dec
 
         self.encoder = Encoder(n_class, emb_dim, hidden_dim, lstm_units_enc, lstm_dropout, self.device)
-        self.decoder = AttnDecoder(n_class, emb_dim, hidden_dim, lstm_units_dec, lstm_dropout, dropout, self.device)
+        self.decoder = AttnDecoder(n_class, emb_dim, hidden_dim*2, hidden_dim, lstm_units_dec, lstm_dropout, dropout,
+                                   self.device)
 
         self.h_state_linear = nn.Linear(hidden_dim * lstm_units_enc * 2, hidden_dim * lstm_units_dec)
         self.c_state_linear = nn.Linear(hidden_dim * lstm_units_enc * 2, hidden_dim * lstm_units_dec)
