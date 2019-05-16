@@ -1,5 +1,33 @@
 # sustain-seq2seq
 
+## Road-map:
+
+- [ ] Refactor models into components
+
+For LSTM Encoder-Decoder:
+
+- [ ] Validate LSTM EncoderDecoder with AdditiveAttention
+- [ ] Add validation measures (BLEU, CIDEr, etc)
+- [ ] Add logging stuff + visual 
+- [ ] Add TeacherForcing & decay, validate it
+- [ ] Add label smoothing
+- [ ] Validate global additive attention is working (plot heatmap for ro-en task)
+- [ ] Implement multihead attention (class name: ---)
+- [ ] Encoder with self attention (multihead) (class name: ---)
+- [ ] Decoder with self attention (multihead) (class name: ---)
+- [ ] Add coverage (see NMT coverage)
+- [ ] Add multiplicative/bilinear global attention ( https://arxiv.org/abs/1508.04025 ), validate it
+- [ ] Implement beam search with length penalty 
+- [ ] Nice and clean run script, that takes strings as input and outputs strings back (i.e full process)
+
+For Transformer: 
+
+- [ ] Is it actually working ? Take it from there.
+
+## Validation scores:
+
+- TODO
+
 ## Folder structure:
 
 #### Data folder
