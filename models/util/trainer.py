@@ -31,6 +31,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
 
     for i in range(seq_len):
+        print("X   :", end='')
         for j in range(len(X_sample[i])):
             token = str(X_sample[i][j].item())
 
@@ -41,7 +42,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
                 break
             else:
                 print(src_i2w[token] + " ", end='')
-        print()
+        print("\nY   :", end='')
         for j in range(len(y_sample[i])):
             token = str(y_sample[i][j].item())
 
@@ -52,7 +53,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
                 break
             else:
                 print(tgt_i2w[token] + " ", end='')
-        print()
+        print("\nPRED:", end='')
         for j in range(len(y_pred_dev_sample[i])):
             token = str(y_pred_dev_sample[i][j].item())
 
@@ -130,10 +131,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             # x_batch and y_batch shapes: [bs, padded_sequence]
             output = model.forward(x_batch, y_in_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
-            #print(output.size())
-            #print(output.view(-1, n_class).size())
-            #print(y_out_batch.size())
-            #input("Asd")
+            
             loss = criterion(output.view(-1, n_class), y_out_batch.contiguous().flatten())                        
             loss.backward()
             optimizer.step()
@@ -141,12 +139,15 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             total_loss += loss.data.item()
             log_average_loss = total_loss / (batch_index+1)
             t.set_postfix(loss=log_average_loss) 
-
+        del loss
+        
         # dev
         if valid_loader is not None:
-            model.eval()            
+            model.eval()     
             dev_accuracy = 0
             
+            _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
+                        
             t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
             for batch_index, (x_dev_batch, y_dev_batch) in enumerate(t):            
                 if model.cuda:
@@ -169,7 +170,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
                 
-            _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
+            
             
         else: # disable patience if no dev provided and always save model 
             current_patience = patience

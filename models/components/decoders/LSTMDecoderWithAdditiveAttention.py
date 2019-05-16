@@ -32,6 +32,7 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
         self.lstm = nn.LSTM(emb_dim + input_size, hidden_dim, num_layers, dropout=lstm_dropout, batch_first=True)
         self.output_linear = nn.Linear(hidden_dim, n_class)
         
+        self.device = device
         self.to(device)
 
     def forward(self, input, enc_output, dec_states, teacher_forcing_ratio):
@@ -52,7 +53,7 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
         seq_len_dec = input.shape[1]        
 
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
-        output = torch.Tensor()
+        output = torch.Tensor().to(self.device)
 
         # Loop over the rest of tokens in the input seq_len_dec.
         for i in range(0, seq_len_dec):
