@@ -59,7 +59,7 @@ class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
         if self.cuda:
             self.to(self.device)
 
-    def forward(self, x, y, decay=0):
+    def forward(self, x, y, teacher_forcing_ratio=0.):
         """
         Args:
             x (tensor): The input of the decoder. Shape: [batch_size, seq_len_enc].
@@ -80,7 +80,7 @@ class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
             pass #dec_state = (,) # TODO initial zero, apoi random-xavier, trebuie sa incercam
             
         # Calculates the output of the decoder.
-        output = self.decoder.forward(y, enc_output, dec_states, decay)
+        output = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)
 
         return output
 

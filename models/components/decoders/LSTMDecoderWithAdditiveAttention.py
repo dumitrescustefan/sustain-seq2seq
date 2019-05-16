@@ -31,10 +31,10 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
         self.attention = AdditiveAttention(encoder_input_size=input_size, decoder_hidden_size=hidden_dim, dropout=dropout, device=device)        
         self.lstm = nn.LSTM(emb_dim + input_size, hidden_dim, num_layers, dropout=lstm_dropout, batch_first=True)
         self.output_linear = nn.Linear(hidden_dim, n_class)
-
+        
         self.to(device)
 
-    def forward(self, input, enc_output, dec_states, decay):
+    def forward(self, input, enc_output, dec_states, teacher_forcing_ratio):
         """
         Args:
              input (tensor): The input of the decoder. 
@@ -49,8 +49,7 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
             vocabulary size. Shape: [batch_size, seq_len_dec, n_class].
         """
         batch_size = input.shape[0]
-        seq_len_dec = input.shape[1]
-        print("Decay: ", decay)
+        seq_len_dec = input.shape[1]        
 
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
 
@@ -67,14 +66,14 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
         # [num_layers, batch_size, hidden_dim].
         curr_dec_output, curr_dec_states = self.lstm(lstm_input, dec_states)
         curr_output = self.output_linear(curr_dec_output)
-        output = torch.Tensor(curr_output)
+        output = curr_output.clone()
 
         # Loop over the rest of tokens in the input seq_len_dec.
         for i in range(1, seq_len_dec):
             # Calculate the context vector at step i.
             context_vector = self.attention(state_h=curr_dec_states[0], enc_output=enc_output)
 
-            if np.random.uniform(0, 1) < decay:
+            if np.random.uniform(0, 1) < teacher_forcing_ratio:
                 # Concatenates the i-th embedding of the input with the corresponding  context vector over the second
                 # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
                 # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].

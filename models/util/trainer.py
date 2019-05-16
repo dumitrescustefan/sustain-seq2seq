@@ -70,7 +70,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
 #def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
           resume=False, max_epochs=100000, patience=10, lr=0.0005,
-          tf_start_decay=0.5, tf_end_decay=0.1, tf_epochs_decay=100000):
+          tf_start_ratio=0.5, tf_end_ratio=0., tf_epochs_decay=-1): # teacher forcing parameters
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
@@ -89,7 +89,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     best_accuracy = 0
 
     # Calculates the decay per epoch. Returns a vector of decays.
-    epoch_decay = np.linspace(tf_start_decay, tf_end_decay, tf_epochs_decay)
+    if tf_epochs_decay > 0:
+        epoch_decay = np.linspace(tf_start_ratio, tf_end_ratio, tf_epochs_decay)
 
     if resume: # load checkpoint         
         extra_variables = model.load_checkpoint(model_store_path, extension="best")                
@@ -99,15 +100,24 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         load_optimizer_checkpoint (optimizer, model.cuda, model_store_path, extension="best")
     
     while current_patience > 0 and current_epoch < max_epochs:
-        print()
+        print("_"*120+"\n")        
+        
+        # teacher forcing ratio for current epoch
+        tf_ratio = tf_start_ratio
+        if tf_epochs_decay > 0:
+            if current_epoch < tf_epochs_decay: 
+                tf_ratio = epoch_decay[current_epoch]
+            else: 
+                tf_ratio = tf_end_ratio
+        
+        print("Teacher forcing ratio is {}".format(tf_ratio))
+        print()        
         
         # train
         model.train()
         total_loss = 0
         t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="batches")
-        
-        for batch_index, (x_batch, y_batch) in enumerate(t):
-        #for x_batch, y_batch in train_loader:
+        for batch_index, (x_batch, y_batch) in enumerate(t):        
             if model.cuda:
                 x_batch = x_batch.cuda()
                 y_batch = y_batch.cuda()
@@ -118,7 +128,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             optimizer.zero_grad()
             
             # x_batch and y_batch shapes: [bs, padded_sequence]
-            output = model.forward(x_batch, y_in_batch, epoch_decay[current_epoch])
+            output = model.forward(x_batch, y_in_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             #print(output.size())
             #print(output.view(-1, n_class).size())

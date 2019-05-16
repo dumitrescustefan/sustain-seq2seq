@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 10
+    batch_size = 32
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -59,22 +59,19 @@ if __name__ == "__main__":
     print(model)
     print("_"*80+"\n")
     
-    resume = True
-    max_epochs = 100        
-    model_path = os.path.join("..", "..", "train", "lstm_attn")
     train(model, 
           src_i2w, 
           tgt_i2w,
           train_loader, 
           valid_loader, 
           test_loader,                          
-          model_store_path = model_path, 
-          resume = False, 
-          max_epochs = max_epochs, 
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
+          resume = True, 
+          max_epochs = 100, 
           patience = 10, 
           lr = 0.001,
-          tf_start_decay=0.8,
-          tf_end_decay=0.1,
-          tf_epochs_decay=max_epochs)
+          tf_start_ratio=1.,
+          tf_end_ratio=0.1,
+          tf_epochs_decay=10)
           
     # ######################################################################
