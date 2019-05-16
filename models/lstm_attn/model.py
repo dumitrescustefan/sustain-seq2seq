@@ -7,6 +7,7 @@ import torch.nn as nn
 from models.components.encoders.LSTMEncoder import LSTMEncoder
 from models.components.decoders.LSTMDecoderWithAdditiveAttention import LSTMDecoderWithAdditiveAttention
 
+
 class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
     def __init__(self, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_dropout, enc_lstm_dropout, # encoder params
                     dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_dropout, dec_lstm_dropout, dec_vocab_size, dec_transfer_hidden=False): # decoder params   
@@ -58,7 +59,7 @@ class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
         if self.cuda:
             self.to(self.device)
 
-    def forward(self, x, y):
+    def forward(self, x, y, decay=0):
         """
         Args:
             x (tensor): The input of the decoder. Shape: [batch_size, seq_len_enc].
@@ -79,7 +80,7 @@ class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
             pass #dec_state = (,) # TODO initial zero, apoi random-xavier, trebuie sa incercam
             
         # Calculates the output of the decoder.
-        output = self.decoder.forward(y, enc_output, dec_states)
+        output = self.decoder.forward(y, enc_output, dec_states, decay)
 
         return output
 

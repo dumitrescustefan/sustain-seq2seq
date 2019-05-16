@@ -4,6 +4,7 @@ import torch.nn as nn
 from models.util.log import Log
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
+import numpy as np
 
 
 def get_freer_gpu():  
@@ -68,7 +69,8 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
 
 #def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
-          resume=False, max_epochs=100000, patience=10, lr=0.0005):
+          resume=False, max_epochs=100000, patience=10, lr=0.0005,
+          tf_start_decay=0.5, tf_end_decay=0.1, tf_epochs_decay=100000):
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
@@ -84,7 +86,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
     current_patience = patience
-    best_accuracy = 0.
+    best_accuracy = 0
+
+    # Calculates the decay per epoch. Returns a vector of decays.
+    epoch_decay = np.linspace(tf_start_decay, tf_end_decay, tf_epochs_decay)
 
     if resume: # load checkpoint         
         extra_variables = model.load_checkpoint(model_store_path, extension="best")                
@@ -113,7 +118,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             optimizer.zero_grad()
             
             # x_batch and y_batch shapes: [bs, padded_sequence]
-            output = model.forward(x_batch, y_in_batch)
+            output = model.forward(x_batch, y_in_batch, epoch_decay[current_epoch])
             # output shape: [bs, padded_sequence, n_class]
             #print(output.size())
             #print(output.view(-1, n_class).size())

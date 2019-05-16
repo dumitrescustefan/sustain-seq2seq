@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    train_loader.dataset.X = train_loader.dataset.X[0:300]
-    train_loader.dataset.y = train_loader.dataset.y[0:300]
-    valid_loader.dataset.X = valid_loader.dataset.X[0:300]
-    valid_loader.dataset.y = valid_loader.dataset.y[0:300]
+    train_loader.dataset.X = train_loader.dataset.X[0:100]
+    train_loader.dataset.y = train_loader.dataset.y[0:100]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -40,20 +40,20 @@ if __name__ == "__main__":
     # MODEL TRAINING #######################################################
     
     model = LSTMEncoderDecoderWithAdditiveAttention(
-                enc_vocab_size = len(src_w2i),
-                enc_emb_dim = 300,
-                enc_hidden_dim = 512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
-                enc_num_layers = 2,
-                enc_dropout = 0.2,
-                enc_lstm_dropout = 0.2, 
-                dec_input_dim = 256, # must be equal to enc_hidden_dim
-                dec_emb_dim = 300,
-                dec_hidden_dim = 256,
-                dec_num_layers = 2,
-                dec_dropout = 0.2,
-                dec_lstm_dropout = 0.2,
-                dec_vocab_size = len(tgt_w2i),
-                dec_transfer_hidden = True)
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=300,
+                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.2,
+                enc_lstm_dropout=0.2,
+                dec_input_dim=56, # must be equal to enc_hidden_dim
+                dec_emb_dim=300,
+                dec_hidden_dim=256,
+                dec_num_layers=2,
+                dec_dropout=0.2,
+                dec_lstm_dropout=0.2,
+                dec_vocab_size=len(tgt_w2i),
+                dec_transfer_hidden=True)
     
     print("_"*80+"\n")
     print(model)
@@ -72,6 +72,9 @@ if __name__ == "__main__":
           resume = False, 
           max_epochs = max_epochs, 
           patience = 10, 
-          lr = 0.001)
+          lr = 0.001,
+          tf_start_decay=0.8,
+          tf_end_decay=0.1,
+          tf_epochs_decay=max_epochs)
           
     # ######################################################################

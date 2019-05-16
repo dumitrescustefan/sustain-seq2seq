@@ -4,7 +4,10 @@ sys.path.insert(0, '../../..')
 import torch
 import torch.nn as nn
 
+import numpy as np
+
 from models.components.attention.AdditiveAttention import AdditiveAttention
+
 
 class LSTMDecoderWithAdditiveAttention(nn.Module):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device):
@@ -31,7 +34,7 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
 
         self.to(device)
 
-    def forward(self, input, enc_output, dec_states):
+    def forward(self, input, enc_output, dec_states, decay):
         """
         Args:
              input (tensor): The input of the decoder. 
@@ -47,46 +50,51 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
         """
         batch_size = input.shape[0]
         seq_len_dec = input.shape[1]
+        print("Decay: ", decay)
 
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
 
-        # Creates the embeddings. [batch_size, seq_len] -> [batch_size, seq_len, emb_dim].
-        embeddings = self.embedding(input)
-
         # Calculates the context vector
-        context_vector = self.attention(state_h = dec_states[0], enc_output = enc_output)
+        context_vector = self.attention(state_h=dec_states[0], enc_output = enc_output)
 
         # Concatenates the input of the <BOS> embedding with the context vector over the second dimensions. Transforms
         # the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] + [batch_size, hidden_dim *
         # num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
-        lstm_input = torch.cat((embeddings[:, 0, :], context_vector), dim=1).reshape(batch_size, 1, -1).contiguous()
+        lstm_input = torch.cat((self.embedding(input[:, 0]), context_vector), dim=1).reshape(batch_size, 1, -1).contiguous()
 
         # Feeds the resulted first token to the lstm layer of the decoder. The initial state of the decoder is the
         # transformed state of the last LSTM layer of the encoder. [batch_size, seq_len_dec, hidden_dim],
         # [num_layers, batch_size, hidden_dim].
-        dec_output, dec_states = self.lstm(lstm_input, dec_states)
+        curr_dec_output, curr_dec_states = self.lstm(lstm_input, dec_states)
+        curr_output = self.output_linear(curr_dec_output)
+        output = torch.Tensor(curr_output)
 
         # Loop over the rest of tokens in the input seq_len_dec.
         for i in range(1, seq_len_dec):
             # Calculate the context vector at step i.
-            context_vector = self.attention(state_h = dec_states[0], enc_output = enc_output)
+            context_vector = self.attention(state_h=curr_dec_states[0], enc_output=enc_output)
 
-            # Concatenates the input of the i-th embedding with the corresponding  context vector over the second
-            # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
-            # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
-            lstm_input = torch.cat((embeddings[:, i, :], context_vector), dim=1).reshape(batch_size, 1, -1)
+            if np.random.uniform(0, 1) < decay:
+                # Concatenates the i-th embedding of the input with the corresponding  context vector over the second
+                # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
+                # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
+                lstm_input = torch.cat((self.embedding(input[:, i]), context_vector), dim=1).reshape(batch_size, 1, -1)
+            else:
+                # Calculates the embeddings of the previous output. Counts the argmax over the last third dimension and
+                # then squeezes the second dimension, the sequence length. [batch_size, emb_dim].
+                prev_output_embeddings = self.embedding(torch.squeeze(torch.argmax(curr_output, dim=2), dim=1))
+
+                # Concatenates the (i-1)-th embedding of the previous output with the corresponding  context vector over the second
+                # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
+                # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
+                lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
 
             # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
-            # [batch_size, seq_len_dec, hidden_dim], [num_layers, batch_size, hidden_dim].
-            curr_dec_output, dec_states = self.lstm(lstm_input, dec_states)
+            # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
+            curr_dec_output, curr_dec_states = self.lstm(lstm_input, curr_dec_states)
 
-            # Creates the final decoder LSTM output sequence by concatenating the i-th decoder LSTM output with the
-            # previous decoder LSTM output sequence. [batch_size, i-1, hidden_dim] -> [batch_size, i, hidden_dim].
-            dec_output = torch.cat((dec_output, curr_dec_output), dim=1)
+            curr_output = self.output_linear(curr_dec_output)
 
-        # Creates the output of the decoder. The last layer maps the output of the LSTM decoders to a tensor with the
-        # last dimension equal to the vocabulary size. [batch_size, seq_len_dec, hidden_dim] -> [batch_size,
-        # seq_len_dec, n_class].
-        output = self.output_linear(dec_output)
+            output = torch.cat((output, curr_output), dim=1)
 
         return output
