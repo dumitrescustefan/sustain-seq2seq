@@ -83,7 +83,7 @@ class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
         output = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)
 
         # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
-        bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size)
+        bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size).to(self.device)
         # Marks the corresponding BOS position with a probability of 1.
         bos_tensor[:, :, 2] = 1
 
