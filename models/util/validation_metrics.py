@@ -25,9 +25,10 @@ def evaluate(y_true, y_pred, i2w, show_accurracy=True, show_bleu=True, show_mete
 
 if __name__ == "__main__":
     y_true = torch.Tensor([[2, 3, 5, 5], [5, 3, 1, 2]])
-    y_pred = torch.Tensor([[2, 3, 5, 5], [5, 3, 2, 2]])
-    i2w = {'2': "uuu", '3': "da", '5': "baba", '1': "didi"}
+    y_pred = torch.Tensor([[2, 3, 5, 5], [5, 2, 1, 2]])
+    i2w = {'2': "uuu", '3': "da", '5': "baba", '1':"cc"}
 
+    print(accuracy_score(y_true, y_pred))
     print(bleu_score(y_true, y_pred, i2w))
     print(meteor_score(y_true, y_pred, i2w))
 

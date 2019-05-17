@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
+    batch_size = 15
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    # train_loader.dataset.X = train_loader.dataset.X[0:300]
-    # train_loader.dataset.y = train_loader.dataset.y[0:300]
-    # valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    # valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    train_loader.dataset.X = train_loader.dataset.X[0:300]
+    train_loader.dataset.y = train_loader.dataset.y[0:300]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     model = LSTMEncoderDecoderWithAdditiveAttention(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=300,
-                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=2,
                 enc_dropout=0.2,
                 enc_lstm_dropout=0.2,

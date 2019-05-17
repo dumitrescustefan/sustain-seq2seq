@@ -3,6 +3,8 @@ sys.path.insert(0, '../../..')
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 class AdditiveAttention(nn.Module):
     def __init__(self, encoder_input_size, decoder_hidden_size, dropout, device):
@@ -20,7 +22,8 @@ class AdditiveAttention(nn.Module):
 
         self.attn1 = nn.Linear(encoder_input_size+decoder_hidden_size, int(encoder_input_size/2))
         self.attn2 = nn.Linear(int(encoder_input_size/2), 1)
-        self.dropout = nn.Dropout(dropout)
+
+        self.p_dropout = dropout
 
         self.to(device)
 
@@ -63,10 +66,9 @@ class AdditiveAttention(nn.Module):
         attn_input = torch.cat((enc_output, state_h), dim=2)
         
         # Calculates the attention weights.
-        attn_hidden = self.attn1(attn_input)
-        attn_hidden = self.dropout(attn_hidden)
-        attn_output = self.attn2(attn_hidden)
-        attn_weights = nn.functional.softmax(attn_output, dim=1)
+        attn_hidden = torch.tanh(F.dropout(self.attn1(attn_input), self.p_dropout))
+
+        attn_weights = F.softmax(self.attn2(attn_hidden), dim=1)
 
         # Multiply the attention weights with the attn_weights.
         context_vector = torch.mul(enc_output, attn_weights)
