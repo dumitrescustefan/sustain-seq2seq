@@ -15,7 +15,7 @@ if __name__ == "__main__":
     min_seq_len = 10
     max_seq_len = 10000
 
-    from data.roen.loader import loader 
+    from data.roen.loader import loader
     data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
     

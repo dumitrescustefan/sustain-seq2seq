@@ -14,7 +14,7 @@ if __name__ == "__main__":
     min_seq_len = 10
     max_seq_len = 10000
 
-    from data.roen.loader import loader 
+    from data.roen.loader import loader
     data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
     
@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    train_loader.dataset.X = train_loader.dataset.X[0:100]
-    train_loader.dataset.y = train_loader.dataset.y[0:100]
-    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    # train_loader.dataset.X = train_loader.dataset.X[0:10]
+    # train_loader.dataset.y = train_loader.dataset.y[0:10]
+    # valid_loader.dataset.X = valid_loader.dataset.X[0:10]
+    # valid_loader.dataset.y = valid_loader.dataset.y[0:10]
     # ######################################################################
     
     # GPU SELECTION ########################################################

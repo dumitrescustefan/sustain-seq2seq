@@ -5,6 +5,7 @@ from models.util.log import Log
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 import numpy as np
+from models.util.validation_metrics import evaluate
 
 
 def get_freer_gpu():  
@@ -87,7 +88,6 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
     current_patience = patience
-    best_accuracy = 0
 
     # Calculates the decay per epoch. Returns a vector of decays.
     if tf_epochs_decay > 0:
@@ -123,16 +123,13 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 x_batch = x_batch.cuda()
                 y_batch = y_batch.cuda()
 
-            y_in_batch = y_batch[:, :-1]
-            y_out_batch = y_batch[:, 1:]
-
             optimizer.zero_grad()
             
             # x_batch and y_batch shapes: [bs, padded_sequence]
-            output = model.forward(x_batch, y_in_batch, tf_ratio)
+            output = model.forward(x_batch, y_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             
-            loss = criterion(output.view(-1, n_class), y_out_batch.contiguous().flatten())                        
+            loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
             loss.backward()
             optimizer.step()
             
@@ -143,12 +140,15 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         # dev
         if valid_loader is not None:
-            model.eval()     
-            dev_accuracy = 0
+            model.eval()
             
             _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
                         
             t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
+
+            y_dev = list()
+            y_pred_dev = list()
+
             for batch_index, (x_dev_batch, y_dev_batch) in enumerate(t):            
                 if model.cuda:
                     x_dev_batch = x_dev_batch.cuda()
@@ -157,21 +157,13 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 y_in_dev_batch = y_dev_batch[:, :-1]
                 y_out_dev_batch = y_dev_batch[:, 1:]
 
-                y_pred_dev = model.forward(x_dev_batch, y_in_dev_batch).argmax(dim=2).flatten()
+                y_pred_dev_batch = model.forward(x_dev_batch, y_in_dev_batch).argmax(dim=2)
 
-                dev_accuracy += accuracy_score(y_out_dev_batch.contiguous().flatten().cpu(), y_pred_dev.cpu())
-                
-                current_instance_count = batch_index*batch_size + len(x_dev_batch[0]) # previous full batches + current batch
-                log_dev_accuracy = dev_accuracy / (current_instance_count/batch_size)
-                t.set_postfix(validation_accuracy=log_dev_accuracy)
-            
-            if log_dev_accuracy > best_accuracy:
-                print("\t Best accuracy = {}".format(log_dev_accuracy))
-                model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
-                save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
-                
-            
-            
+                y_dev += y_out_dev_batch.tolist()
+                y_pred_dev += y_pred_dev_batch.tolist()
+
+            evaluate(y_dev, y_pred_dev, tgt_i2w)
+
         else: # disable patience if no dev provided and always save model 
             current_patience = patience
             model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
