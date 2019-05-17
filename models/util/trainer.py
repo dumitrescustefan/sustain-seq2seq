@@ -88,6 +88,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
     current_patience = patience
+    best_accuracy = 0.
 
     # Calculates the decay per epoch. Returns a vector of decays.
     if tf_epochs_decay > 0:
@@ -138,7 +139,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             t.set_postfix(loss=log_average_loss) 
         del loss
         
-        # dev
+        # dev        
         if valid_loader is not None:
             model.eval()
             
@@ -159,7 +160,13 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 y_dev += y_dev_batch.tolist()
                 y_pred_dev += y_pred_dev_batch.tolist()
 
-            evaluate(y_dev, y_pred_dev, tgt_i2w)
+            score, eval = evaluate(y_dev, y_pred_dev, tgt_i2w, use_accuracy=False, use_bleu=False)
+            print("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score))
+            
+            if score > best_accuracy:
+                print("\t Best score = {:.4f}".format(score))
+                model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
+                save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
 
         else: # disable patience if no dev provided and always save model 
             current_patience = patience
