@@ -1,0 +1,7 @@
+easy-rouge
+seaborn
+numpy
+matplotlib
+six
+torch>=1.0
+torchvision
