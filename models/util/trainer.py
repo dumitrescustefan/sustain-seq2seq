@@ -82,7 +82,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_object = Log(log_path, clear=True)
     print("Working in folder [{}]".format(model_store_path))
     
-    criterion = nn.CrossEntropyLoss(reduction='sum')
+    criterion = nn.CrossEntropyLoss(reduction='sum', ignore_index=0)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
@@ -154,12 +154,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                     x_dev_batch = x_dev_batch.cuda()
                     y_dev_batch = y_dev_batch.cuda()
 
-                y_in_dev_batch = y_dev_batch[:, :-1]
-                y_out_dev_batch = y_dev_batch[:, 1:]
+                y_pred_dev_batch = model.forward(x_dev_batch, y_dev_batch).argmax(dim=2)
 
-                y_pred_dev_batch = model.forward(x_dev_batch, y_in_dev_batch).argmax(dim=2)
-
-                y_dev += y_out_dev_batch.tolist()
+                y_dev += y_dev_batch.tolist()
                 y_pred_dev += y_pred_dev_batch.tolist()
 
             evaluate(y_dev, y_pred_dev, tgt_i2w)

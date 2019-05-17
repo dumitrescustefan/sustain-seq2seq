@@ -56,7 +56,7 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
         output = torch.Tensor().to(self.device)
 
         # Loop over the rest of tokens in the input seq_len_dec.
-        for i in range(0, seq_len_dec):
+        for i in range(0, seq_len_dec-1):
             # Calculate the context vector at step i.
             context_vector = self.attention(state_h=dec_states[0], enc_output=enc_output)
 
@@ -79,8 +79,11 @@ class LSTMDecoderWithAdditiveAttention(nn.Module):
             # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
             dec_output, dec_states = self.lstm(lstm_input, dec_states)
 
+            # Maps the decoder output to the decoder vocab size space. [batch_size, 1, hidden_dim] -> [batch_size, 1,
+            # n_class].
             lin_output = self.output_linear(dec_output)
 
+            # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
             output = torch.cat((output, lin_output), dim=1)
 
         return output

@@ -10,7 +10,7 @@ from models.components.decoders.LSTMDecoderWithAdditiveAttention import LSTMDeco
 
 class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
     def __init__(self, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_dropout, enc_lstm_dropout, # encoder params
-                    dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_dropout, dec_lstm_dropout, dec_vocab_size, dec_transfer_hidden=False): # decoder params   
+                 dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_dropout, dec_lstm_dropout, dec_vocab_size, dec_transfer_hidden=False): # decoder params
         
         """
         Creates a simple Encoder-Decoder with additive attention.
@@ -78,9 +78,18 @@ class LSTMEncoderDecoderWithAdditiveAttention(nn.Module):
             dec_states = self.transfer_hidden_from_encoder_to_decoder(enc_states)
         else:
             pass #dec_state = (,) # TODO initial zero, apoi random-xavier, trebuie sa incercam
-            
+
         # Calculates the output of the decoder.
         output = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)
+
+        # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
+        bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size)
+        # Marks the corresponding BOS position with a probability of 1.
+        bos_tensor[:, :, 2] = 1
+
+        # Concatenates the BOS tensor with the output. [batch_size, dec_seq_len-1, dec_vocab_size] -> [batch_size,
+        # dec_seq_len, dec_vocab_size]
+        output = torch.cat((bos_tensor, output), dim=1)
 
         return output
 

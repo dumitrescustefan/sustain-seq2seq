@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    # train_loader.dataset.X = train_loader.dataset.X[0:10]
-    # train_loader.dataset.y = train_loader.dataset.y[0:10]
-    # valid_loader.dataset.X = valid_loader.dataset.X[0:10]
-    # valid_loader.dataset.y = valid_loader.dataset.y[0:10]
+    # train_loader.dataset.X = train_loader.dataset.X[0:300]
+    # train_loader.dataset.y = train_loader.dataset.y[0:300]
+    # valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    # valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
