@@ -82,7 +82,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_object = Log(log_path, clear=True)
     print("Working in folder [{}]".format(model_store_path))
     
-    criterion = nn.CrossEntropyLoss(reduction='sum', ignore_index=0)
+    criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
@@ -145,33 +145,33 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             
             _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
                         
-            t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
-
-            y_dev = list()
-            y_pred_dev = list()
-
-            for batch_index, (x_dev_batch, y_dev_batch) in enumerate(t):            
-                if model.cuda:
-                    x_dev_batch = x_dev_batch.cuda()
-                    y_dev_batch = y_dev_batch.cuda()
-
-                y_pred_dev_batch = model.forward(x_dev_batch, y_dev_batch).argmax(dim=2)
-
-                y_dev += y_dev_batch.tolist()
-                y_pred_dev += y_pred_dev_batch.tolist()
-
-            score, eval = evaluate(y_dev, y_pred_dev, tgt_i2w, use_accuracy=False, use_bleu=False)
-            print("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score))
-            
-            if score > best_accuracy:
-                print("\t Best score = {:.4f}".format(score))
-                model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
-                save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
-
-        else: # disable patience if no dev provided and always save model 
-            current_patience = patience
-            model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
-            save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+        #     t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
+        #
+        #     y_dev = list()
+        #     y_pred_dev = list()
+        #
+        #     for batch_index, (x_dev_batch, y_dev_batch) in enumerate(t):
+        #         if model.cuda:
+        #             x_dev_batch = x_dev_batch.cuda()
+        #             y_dev_batch = y_dev_batch.cuda()
+        #
+        #         y_pred_dev_batch = model.forward(x_dev_batch, y_dev_batch).argmax(dim=2)
+        #
+        #         y_dev += y_dev_batch.tolist()
+        #         y_pred_dev += y_pred_dev_batch.tolist()
+        #
+        #     score, eval = evaluate(y_dev, y_pred_dev, tgt_i2w, use_accuracy=False, use_bleu=False)
+        #     print("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score))
+        #
+        #     if score > best_accuracy:
+        #         print("\t Best score = {:.4f}".format(score))
+        #         model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
+        #         save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+        #
+        # else: # disable patience if no dev provided and always save model
+        #     current_patience = patience
+        #     model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
+        #     save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
             
         current_epoch += 1
 

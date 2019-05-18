@@ -40,6 +40,7 @@ def evaluate(y_true, y_pred, i2w, use_accuracy=True, use_bleu=True, use_meteor=T
     eval["score"] = eval["score"]/count
     return eval["score"], eval
 
+
 if __name__ == "__main__":
     y_true = torch.Tensor([[2, 3, 5, 5], [5, 3, 1, 2]])
     y_pred = torch.Tensor([[2, 3, 5, 5], [5, 2, 1, 2]])

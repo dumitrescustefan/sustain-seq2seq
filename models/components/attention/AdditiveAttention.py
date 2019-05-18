@@ -4,9 +4,10 @@ sys.path.insert(0, '../../..')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.components.attention.Attention import Attention
 
 
-class AdditiveAttention(nn.Module):
+class AdditiveAttention(Attention):
     def __init__(self, encoder_input_size, decoder_hidden_size, dropout, device):
         """
         Creates an Decoder with attention.
@@ -43,25 +44,8 @@ class AdditiveAttention(nn.Module):
         """
         batch_size = enc_output.shape[0]
         seq_len = enc_output.shape[1]
-        
-        # in case the decoder has more than 1 layer, take only the last one
-        if state_h.shape[0] > 1:
-            state_h = state_h[state_h.shape[0]-1:state_h.shape[0],:,:]
-        
-        # Permutes the tensor dims to put the batch_size to the first position. Creates a 3-D sequence with a length of
-        # one from the 2-D tensor and expands the sequence length to seq_len. This makes the computation of
-        # the cat between the enc_output and encoder much easier. 
-        # [dec_num_layers * 1, batch_size, decoder_hidden_size] -> [batch_size, seq_len, decoder_hidden_size * dec_num_layers].
-        
-        # [dec_num_layers * 1, batch_size, decoder_hidden_size] -> [batch_size, dec_num_layers * 1, decoder_hidden_size]
-        state_h = state_h.permute(1, 0, 2)
-        
-        # [batch_size, dec_num_layers * 1, decoder_hidden_size] -> [batch_size, 1, dec_num_layers * 1 * decoder_hidden_size]
-        state_h = state_h.reshape(batch_size, 1, -1)
-        
-        # [batch_size, 1, dec_num_layers * 1 * decoder_hidden_size] -> [batch_size, seq_len, dec_num_layers * 1 * decoder_hidden_size]        
-        state_h = state_h.expand(-1, seq_len, -1)
-        
+        state_h = self.calculate_new_state_h(state_h, batch_size, seq_len)
+
         # Concatenates the encoder output with the new hidden state over the third dimension.
         attn_input = torch.cat((enc_output, state_h), dim=2)
         
@@ -76,5 +60,5 @@ class AdditiveAttention(nn.Module):
         # Calculates the sum over the seq_len.
         context_vector = torch.sum(context_vector, dim=1) 
         
-        return context_vector # [batch_size, encoder_input_size]
+        return context_vector, attn_weights  # [batch_size, encoder_input_size], [batch_size, enc_seq_len, 1]
         
