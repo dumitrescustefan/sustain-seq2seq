@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    #train_loader.dataset.X = train_loader.dataset.X[0:300]
-    #train_loader.dataset.y = train_loader.dataset.y[0:300]
-    #valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    #valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    train_loader.dataset.X = train_loader.dataset.X[0:300]
+    train_loader.dataset.y = train_loader.dataset.y[0:300]
+    valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -67,11 +67,11 @@ if __name__ == "__main__":
           test_loader,                          
           model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
           resume = True, 
-          max_epochs = 60, 
-          patience = 60, 
+          max_epochs = 50, 
+          patience = 50, 
           lr = 0.001,
           tf_start_ratio=1.,
           tf_end_ratio=0.1,
-          tf_epochs_decay=35)
+          tf_epochs_decay=30)
           
     # ######################################################################

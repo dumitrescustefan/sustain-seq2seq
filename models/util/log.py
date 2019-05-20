@@ -1,9 +1,11 @@
 import matplotlib
 matplotlib.use('Agg')
-import os, sys, json, time, glob
+import os, sys, json, time, glob, pprint
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from datetime import datetime
+
 
 class Log():
     def __init__ (self, root, experiment=None, clear=False):
@@ -67,12 +69,18 @@ class Log():
         with open(self._json_file, "w+", encoding="utf-8") as f:
             json.dump(js, f)
     
-    def text(self, text):
-        with open(self._txt_file, "a", encoding="utf-8") as f:
-            if text.strip()!="":
-                txt = "[{}] {}\n".format(self._get_elapsed(), text)
+    def text(self, text=""):
+        if isinstance(text, str):
+            if text.strip()!="":                
+                txt = "[{}] {}\n".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), text.rstrip())
             else:
-                txt = "\n"
+                txt = "\n"            
+        elif isinstance(text, dict):
+            txt = "[{}] {}\n".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), pprint.pformat(text, indent=4, width=200) )
+        else:
+            txt = "[{}] {}\n".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), str(text))
+        
+        with open(self._txt_file, "a", encoding="utf-8") as f:
             f.write(txt)
         
     def draw(self, last_quarter=False):

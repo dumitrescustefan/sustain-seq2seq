@@ -71,7 +71,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
 
 #def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
-          resume=False, max_epochs=100000, patience=10, lr=0.0005,
+          resume=False, max_epochs=100000, patience=10, lr=0.001,
           tf_start_ratio=0.5, tf_end_ratio=0., tf_epochs_decay=-1): # teacher forcing parameters
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
@@ -80,6 +80,11 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     
     log_path = os.path.join(model_store_path,"log")
     log_object = Log(log_path, clear=True)
+    log_object.text("Training model: "+model.__class__.__name__)
+    log_object.text("\tresume={}, patience={}, lr={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, lr, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
+    log_object.text(model.__dict__)
+    log_object.text()
+        
     print("Working in folder [{}]".format(model_store_path))
     
     criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -96,13 +101,16 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
 
     if resume: # load checkpoint         
         extra_variables = model.load_checkpoint(model_store_path, extension="last")                
+        load_optimizer_checkpoint(optimizer, model.cuda, model_store_path, extension="last")
         if "epoch" in extra_variables:
             current_epoch = extra_variables["epoch"]                
-        print("Resuming from epoch {}".format(current_epoch))
-        load_optimizer_checkpoint (optimizer, model.cuda, model_store_path, extension="last")
+        text="Resuming training from epoch {}".format(current_epoch)
+        print(text)
+        log_object.text(text)        
     
-    while current_patience > 0 and current_epoch < max_epochs:
-        print("_"*120+"\n")        
+    while current_patience > 0 and current_epoch < max_epochs:        
+        print("_"*120+"\n")     
+        
         
         # teacher forcing ratio for current epoch
         tf_ratio = tf_start_ratio
@@ -110,10 +118,12 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             if current_epoch < tf_epochs_decay: 
                 tf_ratio = epoch_decay[current_epoch]
             else: 
-                tf_ratio = tf_end_ratio
+                tf_ratio = tf_end_ratio        
         
-        print("Teacher forcing ratio is {}".format(tf_ratio))
-        print()        
+        text = "Starting epoch {}: current_patience={}, tf_ratio={:.4f} ".format(current_epoch, current_patience, tf_ratio) 
+        print(text)
+        log_object.text()
+        log_object.text(text)
         
         # train
         model.train()
@@ -139,6 +149,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             t.set_postfix(loss=log_average_loss) 
         del t, loss, output
         
+        log_object.text("\ttraining_loss={}".format(log_average_loss))
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
 
         # dev        
@@ -167,16 +178,21 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 log_average_loss = total_loss / (batch_index+1)
                 t.set_postfix(loss=log_average_loss) 
             
+            log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
             score, eval = evaluate(y_gold, y_predicted, tgt_i2w, use_accuracy=False, use_bleu=False)            
-            log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)
-            log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
+            log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
+            #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
             
-            print("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score))
+            text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score)
+            print(text)
+            log_object.text(text)
            
             if score > best_accuracy:
-                print("\t Best score = {:.4f}".format(score))
+                text = "\tBest score = {:.4f}".format(score)
+                print(text)
+                log_object.text(text)
                 best_accuracy = score
                 model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            

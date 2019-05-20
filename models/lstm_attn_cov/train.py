@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
+    batch_size = 8
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -68,13 +68,13 @@ if __name__ == "__main__":
           train_loader,
           valid_loader,
           test_loader,
-          model_store_path=os.path.join("..", "..", "train", "lstm_attn"),
+          model_store_path=os.path.join("..", "..", "train", "lstm_attn_cov"),
           resume=True,
-          max_epochs=100,
-          patience=10,
-          lr=0.001,
+          max_epochs = 50, 
+          patience = 50, 
+          lr = 0.001,
           tf_start_ratio=1.,
           tf_end_ratio=0.1,
-          tf_epochs_decay=10)
+          tf_epochs_decay=30)
 
     # ######################################################################
