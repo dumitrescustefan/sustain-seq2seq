@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
+    batch_size = 8
     min_seq_len = 10
     max_seq_len = 10000
 
@@ -24,10 +24,10 @@ if __name__ == "__main__":
         len(test_loader.dataset.X),
         len(src_i2w), len(tgt_i2w)))
 
-    # train_loader.dataset.X = train_loader.dataset.X[0:300]
-    # train_loader.dataset.y = train_loader.dataset.y[0:300]
-    # valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    # valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    #train_loader.dataset.X = train_loader.dataset.X[0:300]
+    #train_loader.dataset.y = train_loader.dataset.y[0:300]
+    #valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    #valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -65,13 +65,13 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path=os.path.join("..", "..", "train", "lstm_attn"),
-          resume=True,
-          max_epochs=100,
-          patience=10,
-          lr=0.001,
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
+          resume = True, 
+          max_epochs = 60, 
+          patience = 60, 
+          lr = 0.001,
           tf_start_ratio=1.,
           tf_end_ratio=0.1,
-          tf_epochs_decay=10)
+          tf_epochs_decay=35)
           
     # ######################################################################

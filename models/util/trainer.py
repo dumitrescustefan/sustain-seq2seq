@@ -95,11 +95,11 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         epoch_decay = np.linspace(tf_start_ratio, tf_end_ratio, tf_epochs_decay)
 
     if resume: # load checkpoint         
-        extra_variables = model.load_checkpoint(model_store_path, extension="best")                
+        extra_variables = model.load_checkpoint(model_store_path, extension="last")                
         if "epoch" in extra_variables:
             current_epoch = extra_variables["epoch"]                
         print("Resuming from epoch {}".format(current_epoch))
-        load_optimizer_checkpoint (optimizer, model.cuda, model_store_path, extension="best")
+        load_optimizer_checkpoint (optimizer, model.cuda, model_store_path, extension="last")
     
     while current_patience > 0 and current_epoch < max_epochs:
         print("_"*120+"\n")        
@@ -137,42 +137,65 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             total_loss += loss.data.item()
             log_average_loss = total_loss / (batch_index+1)
             t.set_postfix(loss=log_average_loss) 
-        del loss
+        del t, loss, output
         
+        log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
+
         # dev        
         if valid_loader is not None:
             model.eval()
-            
+            total_loss = 0
             _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
-                        
-        #     t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
-        #
-        #     y_dev = list()
-        #     y_pred_dev = list()
-        #
-        #     for batch_index, (x_dev_batch, y_dev_batch) in enumerate(t):
-        #         if model.cuda:
-        #             x_dev_batch = x_dev_batch.cuda()
-        #             y_dev_batch = y_dev_batch.cuda()
-        #
-        #         y_pred_dev_batch = model.forward(x_dev_batch, y_dev_batch).argmax(dim=2)
-        #
-        #         y_dev += y_dev_batch.tolist()
-        #         y_pred_dev += y_pred_dev_batch.tolist()
-        #
-        #     score, eval = evaluate(y_dev, y_pred_dev, tgt_i2w, use_accuracy=False, use_bleu=False)
-        #     print("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score))
-        #
-        #     if score > best_accuracy:
-        #         print("\t Best score = {:.4f}".format(score))
-        #         model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
-        #         save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
-        #
-        # else: # disable patience if no dev provided and always save model
-        #     current_patience = patience
-        #     model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
-        #     save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+
+            t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
+            y_gold = list()
+            y_predicted = list()
+
+            for batch_index, (x_batch, y_batch) in enumerate(t):            
+                if model.cuda:
+                    x_batch = x_batch.cuda()
+                    y_batch = y_batch.cuda()
+
+                output = model.forward(x_batch, y_batch)
+                loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+                
+                y_predicted_batch = output.argmax(dim=2)
+                y_gold += y_batch.tolist()
+                y_predicted += y_predicted_batch.tolist()                
+                
+                total_loss += loss.data.item()
+                log_average_loss = total_loss / (batch_index+1)
+                t.set_postfix(loss=log_average_loss) 
             
+            log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
+            
+            score, eval = evaluate(y_gold, y_predicted, tgt_i2w, use_accuracy=False, use_bleu=False)            
+            log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)
+            log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
+            
+            print("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score))
+           
+            if score > best_accuracy:
+                print("\t Best score = {:.4f}".format(score))
+                best_accuracy = score
+                model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
+                save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
+            
+            # dev cleanup
+            del t, loss, output, y_predicted_batch
+            
+        else: # disable patience if no dev provided and always save model 
+            current_patience = patience
+            model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
+            save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+        
+        # end of epoch
+        log_object.draw()
+        log_object.draw(last_quarter=True) # draw a second graph with last 25% of results
+        
+        model.save_checkpoint(model_store_path, "last", extra={"epoch":current_epoch})
+        save_optimizer_checkpoint (optimizer, model_store_path, extension="last")
+
         current_epoch += 1
 
 
