@@ -2,14 +2,14 @@
 
 ## Road-map:
 
-- [ ] Refactor models into components
+- [X] Refactor models into components
 
 For LSTM Encoder-Decoder:
 
-- [ ] Validate LSTM EncoderDecoder with AdditiveAttention
-- [ ] Add validation measures (BLEU, CIDEr, etc)
+- [X] Validate LSTM EncoderDecoder with AdditiveAttention
+- [X] Add validation measures (BLEU, CIDEr, etc)
 - [ ] Add logging stuff + visual 
-- [ ] Add TeacherForcing & decay, validate it
+- [X] Add TeacherForcing & decay, validate it
 - [ ] Add label smoothing
 - [ ] Validate global additive attention is working (plot heatmap for ro-en task)
 - [ ] Implement multihead attention (class name: ---)
