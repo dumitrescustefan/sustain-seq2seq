@@ -8,7 +8,7 @@ For LSTM Encoder-Decoder:
 
 - [X] Validate LSTM EncoderDecoder with AdditiveAttention
 - [X] Add validation measures (BLEU, CIDEr, etc)
-- [ ] Add logging stuff + visual 
+- [X] Add logging stuff + visual 
 - [X] Add TeacherForcing & decay, validate it
 - [ ] Add label smoothing
 - [ ] Validate global additive attention is working (plot heatmap for ro-en task)
