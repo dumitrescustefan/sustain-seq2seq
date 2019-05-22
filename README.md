@@ -29,6 +29,7 @@ Other:
 - [ ] Attention: bias is needed for KQV transformations? 
 - [ ] Attention: bias is needed for computiation? 
 - [ ] Attention: mask needed before softmax? 
+- [ ] Transfer hidden=False not working, plus needs testing
 
 
 ## Validation scores:
