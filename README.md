@@ -12,7 +12,7 @@ For LSTM Encoder-Decoder:
 - [X] Add TeacherForcing & decay, validate it
 - [ ] Add label smoothing
 - [ ] Validate global additive attention is working (plot heatmap for ro-en task)
-- [ ] Implement multihead attention (class name: ---)
+- [ ] Implement attention with several types (class name: ---)
 - [ ] Encoder with self attention (multihead) (class name: ---)
 - [ ] Decoder with self attention (multihead) (class name: ---)
 - [ ] Add coverage (see NMT coverage)
@@ -23,6 +23,13 @@ For LSTM Encoder-Decoder:
 For Transformer: 
 
 - [ ] Is it actually working ? Take it from there.
+
+Other:
+- [ ] add dummy reverse sequence dataset 
+- [ ] Attention: bias is needed for KQV transformations? 
+- [ ] Attention: bias is needed for computiation? 
+- [ ] Attention: mask needed before softmax? 
+
 
 ## Validation scores:
 
