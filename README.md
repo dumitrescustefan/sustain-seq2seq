@@ -26,9 +26,9 @@ For Transformer:
 Other:
 - [X] add dummy reverse sequence dataset 
 - [ ] Validation measures: input tokenization required? 
-- [ ] Attention: bias is needed for KQV transformations? 
-- [ ] Attention: bias is needed for computiation? 
-- [ ] Attention: mask needed before softmax? 
+- [X] Attention: bias is needed for KQV transformations? Answer: guess not
+- [X] Attention: bias is needed for computiation? Answer: Depends on case, mostly not
+- [ ] Attention: mask needed before softmax? Partial answer: will speed up convergence, in the end won't really matter. Still on it.
 - [ ] Transfer hidden=False not working, plus needs testing
 
 
