@@ -24,7 +24,8 @@ For Transformer:
 - [ ] Is it actually working ? Take it from there.
 
 Other:
-- [ ] add dummy reverse sequence dataset 
+- [X] add dummy reverse sequence dataset 
+- [ ] Validation measures: input tokenization required? 
 - [ ] Attention: bias is needed for KQV transformations? 
 - [ ] Attention: bias is needed for computiation? 
 - [ ] Attention: mask needed before softmax? 
