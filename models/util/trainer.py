@@ -18,6 +18,31 @@ def get_freer_gpu():
         print("Warning: Could execute 'nvidia-smi', default GPU selection is id=0")
         return 0
 
+def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, log_object):
+    # plot attention weights for the first example of the batch; USE ONLY FOR DEV where len(predicted_y)=len(gold_y)
+    # X is a tensor of size [batch_size, x_seq_len] 
+    # y is a tensor of size [batch_size, y_seq_len]
+    # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
+    
+    # X src labels for the first example
+    input_labels = []
+    X_list = X[0].cpu().tolist()
+    for id in X_list:
+        input_labels.append(src_i2w[str(id)])
+    
+    # y tgt labels for the first example    
+    y_list = y[0].cpu().tolist()
+    output_labels = []
+    for id in y_list:
+        output_labels.append(tgt_i2w[str(id)])    
+    
+    # map weights
+    data = np.zeros((len(X_list), len(y_list)))
+    for i in range(len(attention_weights)): # each timestep i
+        attention_over_inputs_at_timestep_i = attention_weights[i][0]
+        data[:,i] = attention_over_inputs_at_timestep_i
+    
+    log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
 def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     X_sample, y_sample = iter(loader).next()
@@ -28,10 +53,11 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         X_sample = X_sample.cuda()
         y_sample = y_sample.cuda()
 
-    y_pred_dev_sample = model.forward(X_sample, y_sample)
+    y_pred_dev_sample, attention_weights = model.forward(X_sample, y_sample)
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
-
-    for i in range(seq_len):
+    
+    # print examples
+    for i in range(seq_len):        
         print("X   :", end='')
         for j in range(len(X_sample[i])):
             token = str(X_sample[i][j].item())
@@ -109,8 +135,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         log_object.text(text)        
     
     while current_patience > 0 and current_epoch < max_epochs:        
-        print("_"*120+"\n")     
-        
+        print("_"*120+"\n")             
         
         # teacher forcing ratio for current epoch
         tf_ratio = tf_start_ratio
@@ -137,7 +162,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             optimizer.zero_grad()
             
             # x_batch and y_batch shapes: [bs, padded_sequence]
-            output = model.forward(x_batch, y_batch, tf_ratio)
+            output, _ = model.forward(x_batch, y_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             
             loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
@@ -161,13 +186,13 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
             y_gold = list()
             y_predicted = list()
-
+            
             for batch_index, (x_batch, y_batch) in enumerate(t):            
                 if model.cuda:
                     x_batch = x_batch.cuda()
                     y_batch = y_batch.cuda()
 
-                output = model.forward(x_batch, y_batch)
+                output, batch_attention_weights = model.forward(x_batch, y_batch)
                 loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
                 
                 y_predicted_batch = output.argmax(dim=2)
@@ -197,6 +222,11 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
             
+            # plot attention_weights for the first example of the last batch (does not matter which batch)
+            
+            # batch_attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
+            _plot_attention_weights(x_batch, y_batch, src_i2w, tgt_i2w, batch_attention_weights, current_epoch, log_object)
+            
             # dev cleanup
             del t, loss, output, y_predicted_batch
             
@@ -204,6 +234,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             current_patience = patience
             model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
             save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+        
         
         # end of epoch
         log_object.draw()

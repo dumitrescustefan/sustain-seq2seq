@@ -6,7 +6,7 @@ import torch.nn as nn
 
 
 class LSTMDecoder(nn.Module):
-    def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, device):
+    def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device):
         """
         Creates an Decoder with attention.
 
@@ -17,12 +17,14 @@ class LSTMDecoder(nn.Module):
             num_layers (int): Number of LSTM layers.
             n_class (int): Number of classes/ Vocabulary size.
             lstm_dropout (float): LSTM dropout.
+            dropout (float): Embeddings dropout 
             device : The device to run the model on.
         """
 
         super(LSTMDecoder, self).__init__()
 
         self.embedding = nn.Embedding(n_class, emb_dim)
+        self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(emb_dim + input_size, hidden_dim, num_layers, dropout=lstm_dropout, batch_first=True)
         self.output_linear = nn.Linear(hidden_dim, n_class)
 
@@ -36,7 +38,7 @@ class LSTMDecoder(nn.Module):
                 Shape: [batch_size, seq_len_dec].
              enc_output (tensor): The output of the encoder last LSTM layer.
                 Shape: [batch_size seq_len_enc, hidden_dim * 2].
-             enc_states (tuple of tensors): The hidden and the cell states of the encoder last LSTM layer after being transformed by the linear layer.
+             dec_states (tuple of tensors): The hidden and the cell states of the encoder last LSTM layer after being transformed by the linear layer.
                 State shape: [num_layers, batch_size, hidden_dim].
 
         Returns:

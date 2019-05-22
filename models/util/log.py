@@ -135,11 +135,20 @@ class Log():
         except:
             return False
         
-    def _modifyme___show_tensor(x, prediction=None, source=None): # x is a numpy 2d matrix
-        fig = plt.figure(figsize=(12, 6))
-        sns.heatmap(x,cmap="rainbow")
-        plt.tight_layout()        
-        return fig       
+    def plot_heatmap(self, x, input_labels=True, output_labels=True, epoch=0): 
+        """
+            x is a numpy 2d matrix        
+            input and output labels are lists of strings, otherwise will be numbers
+        """
+        fig = plt.figure(figsize=(18, 16))             
+        g = sns.heatmap(x, cmap="copper", xticklabels=output_labels, yticklabels=input_labels)
+        g.set_yticklabels(g.get_yticklabels(), rotation = 0)
+        g.set_xticklabels(g.get_xticklabels(), rotation = 90)
+        plt.title('Attention at epoch '+str(epoch))
+        plt.tight_layout()            
+        fig.savefig(os.path.join(self.folder, "attention_"+str(epoch).zfill(4)), bbox_inches='tight')
+        plt.clf()
+           
         
     # return Elapsed as string, already pretty_time
     def _get_elapsed(self):

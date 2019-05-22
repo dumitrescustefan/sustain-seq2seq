@@ -1,35 +1,181 @@
-import torch.nn as nn
+import os, sys
+sys.path.insert(0, '../../..')
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 class Attention(nn.Module):
-    def __init__(self):
-        super(Attention, self).__init__()
-
-    def calculate_new_state_h(self, state_h, batch_size, seq_len):
+    def __init__(self, encoder_size, decoder_size, device, type="additive"):
+        """ Attention module.         
+                TODO description for each type
+                
+                TODO needed bias=False for KVQ transformations, as well for type?
+                
+                TODO need mask?
+                
+            Args:
+                encoder_size (int): Size of the encoder's output (as input for the decoder).
+                decoder_size (int): Size of the decoder's output.
+                device (torch.device): Device (eg. torch.device("cpu"))
+                type (string): One of several types of attention
+        
+            See: https://arxiv.org/pdf/1902.02181.pdf
         """
-        Reshapes the hidden state to desired shape: [num_layers, batch_size, decoder_hidden_size] -> batch_size, seq_len_enc,
-        decoder_hidden_state].
+        super(Attention, self).__init__()
+        self.encoder_size = encoder_size
+        self.decoder_size = decoder_size
+        self.type = type
+        
+        # transforms encoder states into keys
+        self.key_annotation_function = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
+        # transforms encoder states into values 
+        self.value_annotation_function = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
+        # transforms the hidden state into query
+        self.query_annotation_function = nn.Linear(self.decoder_size, self.decoder_size, bias=False)
+        
+        if type == "additive":
+            # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
+            self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
+            self.W2 = nn.Linear(self.decoder_size, self.encoder_size, bias=False)
+            self.V = nn.Linear(self.encoder_size, 1, bias=False)        
+        if type == "multiplicative" or type == "dot":
+            # f(q, K) = q^t K , Luong et al., 2015
+            pass
+        if type == "scaled multiplicative":
+            # f(q, K) = multiplicative / sqrt(dk) , Vaswani et al., 2017
+            pass
+        if type == "general" or type == "bilinear":
+            # f(q, K) = q^t WK , Luong et al., 2015
+            pass
+        if type == "biased general":
+            # f(q, K) = K|(W q + b) Sordoni et al., 2016
+            pass
+        if type == "activated general":
+            # f(q, K) = act(q|WK + b) Ma et al., 2017        
+            pass
+        if type == "concat":
+            # f(q, K) = act(W[K;q] + b) , Luong et al., 2015
+            pass
+        if type = "":
+            # https://arxiv.org/pdf/1702.04521.pdf pagina 3, de adaugat predict-ul in attention, KVP si Q
+        
+         
+        self.to(device)
+
+    def _reshape_state_h(self, state_h):    
+        """
+        Reshapes the hidden state to desired shape
+        Input: [num_layers * 1, batch_size, decoder_hidden_size]  
+        Output: [batch_size, 1, decoder_hidden_state]
 
         Args:
-            state_h (tensor): Previous hidden state of the decoder.
-            batch_size (int): The size of the batch.
-            seq_len (int): The length of the encoder sequence.
-
+            state_h (tensor): Hidden state of the decoder.        
+                [num_layers * 1, batch_size, decoder_hidden_size]
+        
         Returns:
             The reshaped hidden state.
+                [batch_size, 1, decoder_hidden_state]
         """
+        num_layers, batch_size, hidden_size = state_h.size()
+        # in case the decoder has more than 1 layer, take only the last one -> [1, batch_size, decoder_hidden_size]
+        if num_layers > 1:
+            state_h = state_h[num_layers-1:num_layers,:,:]
 
-        # in case the decoder has more than 1 layer, take only the last one
-        if state_h.shape[0] > 1:
-            state_h = state_h[state_h.shape[0]-1:state_h.shape[0],:,:]
+        # [1, batch_size, decoder_hidden_size] -> [batch_size, 1, decoder_hidden_size]
+        return state_h.permute(1, 0, 2)
 
-        # [dec_num_layers * 1, batch_size, decoder_hidden_size] -> [batch_size, dec_num_layers * 1, decoder_hidden_size]
-        state_h = state_h.permute(1, 0, 2)
+    def _energy (self, K, Q):
+        """ 
+            Calculates the compatibility function f(query, keys)
+            
+            Args:
+                K (tensor): Keys tensor of size [batch_size, seq_len, encoder_size]
+                Q (tensor): Query tensor of size [batch_size, 1, decoder_size]
+                
+            Returns: 
+                energy tensor of size [batch_size, seq_len, 1]
+        """
+        if self.type == "additive":                        
+            return self.V(torch.tanh(self.W1(K) + self.W2(Q)))
+            
 
-        # [batch_size, dec_num_layers * 1, decoder_hidden_size] -> [batch_size, 1, dec_num_layers * 1 * decoder_hidden_size]
-        state_h = state_h.reshape(batch_size, 1, -1)
 
-        # [batch_size, 1, dec_num_layers * 1 * decoder_hidden_size] -> [batch_size, seq_len, dec_num_layers * 1 * decoder_hidden_size]
-        state_h = state_h.expand(-1, seq_len, -1)
+    def forward(self, enc_output, state_h):
+        """
+        This function calculates the context vector of the attention layer, given the hidden state and the encoder
+        last lstm layer output.
 
-        return state_h
+        Args:
+            state_h (tensor): The raw hidden state of the decoder's LSTM 
+                Shape: [num_layers * 1, batch_size, decoder_size].
+            enc_output (tensor): The output of the last LSTM encoder layer. 
+                Shape: [batch_size, seq_len, encoder_size].
+
+        Returns:
+            context (tensor): The context vector. Shape: [batch_size, encoder_size]
+            attention_weights (tensor): Attention weights. Shape: [batch_size, seq_len, 1]
+        """
+        batch_size = enc_output.shape[0]
+        seq_len = enc_output.shape[1]        
+        state_h = self._reshape_state_h(state_h) # [batch_size, 1, decoder_size]
+        
+        # get K, V, Q
+        K = self.key_annotation_function(enc_output) # [batch_size, seq_len, encoder_size]
+        V = self.value_annotation_function(enc_output) # [batch_size, seq_len, encoder_size]
+        Q = self.query_annotation_function(state_h) # [batch_size, 1, decoder_size]
+        
+        # calculate energy
+        energy = self._energy(K,Q) # [batch_size, seq_len, 1]        
+        
+        # mask with -inf paddings
+        #scores.masked_fill_(mask == 0, -np.inf)
+        
+        # transform energy into probability distribution using softmax        
+        attention_weights = torch.softmax(energy, dim=1) # [batch_size, seq_len, 1]
+        
+        # calculate weighted values z (element wise multiplication of energy * values)        
+        # attention_weights is [batch_size, seq_len, 1], V is [batch_size, seq_len, encoder_size], z is same as V
+        z = attention_weights*V # same as torch.mul(), element wise multiplication
+        
+        # finally, calculate context as the esum of z. 
+        # z is [batch_size, seq_len, encoder_size], context will be [batch_size, encoder_size]
+        context = torch.sum(z, dim=1)
+        
+        return context, attention_weights # [batch_size, encoder_size], [batch_size, seq_len, 1]
+
+
+if __name__ == "__main__":
+    import numpy as np
+    
+    # prep inputs
+    batch_size = 2
+    seq_len = 10
+    enc_size = 4
+    dec_layers = 5
+    dec_size = 3
+    
+    encoder_outputs = torch.tensor(np.random.rand(batch_size, seq_len, enc_size), dtype=torch.float)
+    decoder_hidden_state = torch.tensor(np.random.rand(dec_layers*1, batch_size, dec_size), dtype=torch.float) # 1 for unidirectional
+    
+    # prep layer
+    device = torch.device("cpu")
+    type = "additive"    
+    att = Attention(enc_size, dec_size, device, type)
+    
+    # run
+    context, attention_weights = att(encoder_outputs, decoder_hidden_state)
+    print("Output is:")
+    print(context)
+    print("Attention weights size:" + str(attention_weights.size()))
+    
+    # debug stuff:    
+    #e1 = torch.tensor([[[2],[0.5]]])
+    #v1 = torch.tensor([ [ [1.,1.,1.] , [5.,5.,5.] ] ])
+    #result would be ([ [ [2.,2.,2.] , [2.5,2.5,2.5] ] ])
+    #print(e1.size())
+    #print(v1.size())
+    #qq = e1*v1
+    #print(qq)
+
+    

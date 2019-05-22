@@ -4,9 +4,9 @@ sys.path.insert(0, '../..')
 from models.components.RNNEncoderDecoder import RNNEncoderDecoder
 
 from models.components.encoders.LSTMEncoder import LSTMEncoder
-from models.components.decoders.LSTMDecoderWithAdditiveAttention import LSTMDecoderWithAdditiveAttention
+from models.components.decoders.LSTMDecoderWithAttention import LSTMDecoderWithAttention
 
-class LSTMEncoderDecoderWithAdditiveAttention(RNNEncoderDecoder):
+class LSTMEncoderDecoderWithAttention(RNNEncoderDecoder):
     def __init__(self,
                  # encoder params
                  enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_dropout, enc_lstm_dropout,
@@ -20,11 +20,12 @@ class LSTMEncoderDecoderWithAdditiveAttention(RNNEncoderDecoder):
             See RNNEncoderDecoder for further args info.
         """
       
-        super(LSTMEncoderDecoderWithAdditiveAttention, self).__init__(# encoder params
-                                                                      LSTMEncoder, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers,
-                                                                      enc_dropout, enc_lstm_dropout,
-                                                                      # decoder params
-                                                                      LSTMDecoderWithAdditiveAttention, dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, dec_transfer_hidden)
+        super(LSTMEncoderDecoderWithAttention, self).__init__(        
+            # encoder params
+            LSTMEncoder, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers,
+            enc_dropout, enc_lstm_dropout,
+            # decoder params
+            LSTMDecoderWithAttention, dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, dec_transfer_hidden)
 
         
         self.to(self.device)

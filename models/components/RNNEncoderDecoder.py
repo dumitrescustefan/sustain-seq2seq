@@ -56,7 +56,7 @@ class RNNEncoderDecoder(nn.Module):
             y (tensor): The input of the decoder. Shape: [batch_size, seq_len_dec].
 
         Returns:
-            The output of the Encoder-Decoder with additive attention. Shape: [batch_size, seq_len_dec, n_class].
+            The output of the Encoder-Decoder with attention. Shape: [batch_size, seq_len_dec, n_class].
         """
         batch_size = x.shape[0]
 
@@ -70,7 +70,7 @@ class RNNEncoderDecoder(nn.Module):
             pass  # dec_state = (,) # TODO initial zero, apoi random-xavier, trebuie sa incercam
 
         # Calculates the output of the decoder.
-        output = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)
+        output, attention_weights = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)
 
         # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
         bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size).to(self.device)
@@ -81,7 +81,7 @@ class RNNEncoderDecoder(nn.Module):
         # dec_seq_len, dec_vocab_size]
         output = torch.cat((bos_tensor, output), dim=1)
 
-        return output
+        return output, attention_weights
 
     def transfer_hidden_from_encoder_to_decoder(self, enc_states):
         batch_size = enc_states[0].shape[1]
