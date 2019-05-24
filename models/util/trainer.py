@@ -1,4 +1,4 @@
-import os, subprocess
+import os, subprocess, gc
 import torch
 import torch.nn as nn
 from models.util.log import Log
@@ -172,10 +172,31 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             total_loss += loss.data.item()
             log_average_loss = total_loss / (batch_index+1)
             t.set_postfix(loss=log_average_loss) 
+            
+            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.memory_allocated()/1024/1024, y_index=0)
+            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
+            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.memory_cached()/1024/1024, y_index=2)
+            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
+            log_object.draw()
+            
+            if model.cuda:                        
+                torch.cuda.synchronize()
+                            
         del t, loss, output
+        gc.collect()
+        
+        if model.cuda:
+            torch.cuda.empty_cache()
+        
+        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_allocated()/1024/1024, y_index=0)
+        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
+        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_cached()/1024/1024, y_index=2)
+        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
+        log_object.draw()
         
         log_object.text("\ttraining_loss={}".format(log_average_loss))
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
+        
 
         # dev        
         if valid_loader is not None:
@@ -202,7 +223,11 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 total_loss += loss.data.item()
                 log_average_loss = total_loss / (batch_index+1)
                 t.set_postfix(loss=log_average_loss) 
-            
+                
+                if model.cuda:
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+                    
             log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             

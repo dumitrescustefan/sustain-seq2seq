@@ -8,9 +8,9 @@ import torch.nn as nn
 class RNNEncoderDecoder(nn.Module):
     def __init__(self,
                  # encoder params
-                 rnn_encoder_object, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_dropout, enc_lstm_dropout,
+                 rnn_encoder_object, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_lstm_dropout, enc_dropout, 
                  # decoder params
-                 rnn_decoder_object, dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, dec_transfer_hidden=True):
+                 rnn_decoder_object, dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, dec_attention_type, dec_transfer_hidden=True):
 
         super(RNNEncoderDecoder, self).__init__()
 
@@ -33,15 +33,16 @@ class RNNEncoderDecoder(nn.Module):
         self.dec_num_layers = dec_num_layers
         self.dec_transfer_hidden = dec_transfer_hidden
         self.dec_vocab_size = dec_vocab_size
+        self.dec_attention_type = dec_attention_type
 
         if dec_transfer_hidden == True:
             assert enc_num_layers == dec_num_layers, "For transferring the last hidden state from encoder to decoder, both must have the same number of layers."
 
         self.encoder = rnn_encoder_object(vocab_size=enc_vocab_size, emb_dim=enc_emb_dim, hidden_dim=enc_hidden_dim,
-                            num_layers=enc_num_layers, lstm_dropout=enc_lstm_dropout, device=self.device)
+                            num_layers=enc_num_layers, lstm_dropout=enc_lstm_dropout, dropout=enc_dropout, device=self.device)
         
         self.decoder = rnn_decoder_object(emb_dim=dec_emb_dim, input_size=enc_hidden_dim, hidden_dim=dec_hidden_dim, num_layers=dec_num_layers,
-                            n_class=dec_vocab_size, lstm_dropout=dec_lstm_dropout, dropout=dec_dropout, device=self.device)
+                            n_class=dec_vocab_size, lstm_dropout=dec_lstm_dropout, dropout=dec_dropout, attention_type=dec_attention_type, device=self.device)
 
         # Transform h from encoder's [num_layers * 2, batch_size, enc_hidden_dim/2] to decoder's [num_layers * 1, batch_size, dec_hidden_dim], same for c; batch_size = 1 (last timestep only)
         self.h_state_linear = nn.Linear(enc_hidden_dim * enc_num_layers, dec_hidden_dim * dec_num_layers * 1)

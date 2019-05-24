@@ -53,6 +53,7 @@ if __name__ == "__main__":
                 dec_dropout=0.2,
                 dec_lstm_dropout=0.2,
                 dec_vocab_size=len(tgt_w2i),
+                dec_attention_type = "general",
                 dec_transfer_hidden=True)
     
     print("_"*80+"\n")
@@ -65,13 +66,135 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn_r_general"), 
           resume = False, 
-          max_epochs = 30, 
-          patience = 30, 
+          max_epochs = 150, 
+          patience = 150, 
           lr = 0.001,
           tf_start_ratio=1.,
           tf_end_ratio=0.1,
-          tf_epochs_decay=10)
+          tf_epochs_decay=50)
+          
+    # ######################################################################
+    
+    
+    # MODEL TRAINING #######################################################
+    
+    model = LSTMEncoderDecoderWithAttention(
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=30,
+                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.2,
+                enc_lstm_dropout=0.2,
+                dec_input_dim=100, # must be equal to enc_hidden_dim
+                dec_emb_dim=30,
+                dec_hidden_dim=50,
+                dec_num_layers=2,
+                dec_dropout=0.2,
+                dec_lstm_dropout=0.2,
+                dec_vocab_size=len(tgt_w2i),
+                dec_attention_type = "additive",
+                dec_transfer_hidden=True)
+    
+    print("_"*80+"\n")
+    print(model)
+    print("_"*80+"\n")
+    
+    train(model, 
+          src_i2w, 
+          tgt_i2w,
+          train_loader, 
+          valid_loader,
+          test_loader,                          
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn_r_additive"), 
+          resume = False, 
+          max_epochs = 150, 
+          patience = 150, 
+          lr = 0.001,
+          tf_start_ratio=1.,
+          tf_end_ratio=0.1,
+          tf_epochs_decay=50)
+          
+    # ######################################################################
+    
+    
+    # MODEL TRAINING #######################################################
+    
+    model = LSTMEncoderDecoderWithAttention(
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=30,
+                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.2,
+                enc_lstm_dropout=0.2,
+                dec_input_dim=100, # must be equal to enc_hidden_dim
+                dec_emb_dim=30,
+                dec_hidden_dim=50,
+                dec_num_layers=2,
+                dec_dropout=0.2,
+                dec_lstm_dropout=0.2,
+                dec_vocab_size=len(tgt_w2i),
+                dec_attention_type = "dot",
+                dec_transfer_hidden=True)
+    
+    print("_"*80+"\n")
+    print(model)
+    print("_"*80+"\n")
+    
+    train(model, 
+          src_i2w, 
+          tgt_i2w,
+          train_loader, 
+          valid_loader,
+          test_loader,                          
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn_r_dot"), 
+          resume = False, 
+          max_epochs = 150, 
+          patience = 150, 
+          lr = 0.001,
+          tf_start_ratio=1.,
+          tf_end_ratio=0.1,
+          tf_epochs_decay=50)
+          
+    # ######################################################################
+    
+    # MODEL TRAINING #######################################################
+    
+    model = LSTMEncoderDecoderWithAttention(
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=30,
+                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.2,
+                enc_lstm_dropout=0.2,
+                dec_input_dim=100, # must be equal to enc_hidden_dim
+                dec_emb_dim=30,
+                dec_hidden_dim=50,
+                dec_num_layers=2,
+                dec_dropout=0.2,
+                dec_lstm_dropout=0.2,
+                dec_vocab_size=len(tgt_w2i),
+                dec_attention_type = "scaled dot",
+                dec_transfer_hidden=True)
+    
+    print("_"*80+"\n")
+    print(model)
+    print("_"*80+"\n")
+    
+    train(model, 
+          src_i2w, 
+          tgt_i2w,
+          train_loader, 
+          valid_loader,
+          test_loader,                          
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn_r_scaled_dot"), 
+          resume = False, 
+          max_epochs = 150, 
+          patience = 150, 
+          lr = 0.001,
+          tf_start_ratio=1.,
+          tf_end_ratio=0.1,
+          tf_epochs_decay=50)
           
     # ######################################################################

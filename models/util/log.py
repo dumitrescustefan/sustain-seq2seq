@@ -148,7 +148,7 @@ class Log():
         plt.tight_layout()            
         fig.savefig(os.path.join(self.folder, "attention_"+str(epoch).zfill(4)), bbox_inches='tight')
         plt.clf()
-           
+        plt.close()
         
     # return Elapsed as string, already pretty_time
     def _get_elapsed(self):

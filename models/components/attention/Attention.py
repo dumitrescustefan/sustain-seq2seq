@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, math
 sys.path.insert(0, '../../..')
 
 import torch
@@ -21,6 +21,11 @@ class Attention(nn.Module):
                 type (string): One of several types of attention
         
             See: https://arxiv.org/pdf/1902.02181.pdf
+            
+            Notes: 
+                Self-Attention(Intra-attention) Relating different positions of the same input sequence. Theoretically the self-attention can adopt any score functions above, but just replace the target sequence with the same input sequence.
+                Global/Soft	Attending to the entire input state space.
+                Local/Hard	Attending to the part of input state space; i.e. a patch of the input image.
         """
         super(Attention, self).__init__()
         self.encoder_size = encoder_size
@@ -32,35 +37,40 @@ class Attention(nn.Module):
         # transforms encoder states into values 
         self.value_annotation_function = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
         # transforms the hidden state into query
-        self.query_annotation_function = nn.Linear(self.decoder_size, self.decoder_size, bias=False)
+        self.query_annotation_function = nn.Linear(self.decoder_size, self.encoder_size, bias=False) # NOTE: transforming q to K size 
         
         if type == "additive":
             # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
             self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
-            self.W2 = nn.Linear(self.decoder_size, self.encoder_size, bias=False)
+            self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
             self.V = nn.Linear(self.encoder_size, 1, bias=False)        
-        if type == "multiplicative" or type == "dot":
+        elif (type == "multiplicative" or type == "dot"):
             # f(q, K) = q^t K , Luong et al., 2015
+            # direct dot product, nothing to declare here
             pass
-        if type == "scaled multiplicative":
+            
+        elif type == "scaled multiplicative" or type == "scaled dot":
             # f(q, K) = multiplicative / sqrt(dk) , Vaswani et al., 2017
-            pass
-        if type == "general" or type == "bilinear":
+            self.scale = math.sqrt(self.encoder_size)            
+            
+        elif type == "general" or type == "bilinear":
             # f(q, K) = q^t WK , Luong et al., 2015
-            pass
-        if type == "biased general":
+            self.W = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
+            
+        elif type == "biased general":
             # f(q, K) = K|(W q + b) Sordoni et al., 2016
             pass
-        if type == "activated general":
+        elif type == "activated general":
             # f(q, K) = act(q|WK + b) Ma et al., 2017        
             pass
-        if type == "concat":
+        elif type == "concat":
             # f(q, K) = act(W[K;q] + b) , Luong et al., 2015
             pass
-        if type = "":
+        elif type == "p":
             # https://arxiv.org/pdf/1702.04521.pdf pagina 3, de adaugat predict-ul in attention, KVP si Q
-        
-         
+            pass
+        else:
+            raise Exception("Attention type not properly defined! (got type={})".format(self.type))
         self.to(device)
 
     def _reshape_state_h(self, state_h):    
@@ -98,8 +108,19 @@ class Attention(nn.Module):
         """
         if self.type == "additive":                        
             return self.V(torch.tanh(self.W1(K) + self.W2(Q)))
-            
-
+        
+        if self.type == "multiplicative" or self.type == "dot":    
+            # q^t K means batch matrix multiplying K with q transposed:
+            # bmm( [batch_size, seq_len, enc_size] , [batch_size, enc_size, 1] ) -> [batch_size, seq_len, 1]            
+            return torch.bmm(K, Q.transpose(1,2))
+        
+        if self.type == "scaled multiplicative" or self.type == "scaled dot":
+            # same as multiplicative but scaled
+            return torch.bmm(K, Q.transpose(1,2))/self.scale
+    
+        if self.type == "general" or self.type == "bilinear":
+            # f(q, K) = q^t WK , Luong et al., 2015
+            return torch.bmm(self.W(K), Q.transpose(1,2))
 
     def forward(self, enc_output, state_h):
         """
@@ -148,6 +169,32 @@ class Attention(nn.Module):
 if __name__ == "__main__":
     import numpy as np
     
+    
+    # debug stuff:    
+    q = torch.tensor([ [ [2.,2.,2.] ] ])
+    K = torch.tensor([ [ [1.,1.,1.] , [5.,5.,5.] ] ])
+    #result would be ([ [ [2.,2.,2.] , [2.5,2.5,2.5] ] ])
+    
+    print(K.size())
+    print(q)
+    print(q.size())
+    #qt = q.expand(1,3,3)#q.transpose(1,2)
+    qt = q.transpose(1,2)
+    print(qt)
+    print(qt.size())    
+    
+    print()
+    r = torch.bmm(K,qt)
+    print(r)
+    print(r.size())
+    print()
+    #print(e1.size())
+    #print(v1.size())
+    #qq = e1*v1
+    #print(qq)
+    
+    
+    
     # prep inputs
     batch_size = 2
     seq_len = 10
@@ -160,7 +207,8 @@ if __name__ == "__main__":
     
     # prep layer
     device = torch.device("cpu")
-    type = "additive"    
+    #type = "additive"    
+    type = "general"    
     att = Attention(enc_size, dec_size, device, type)
     
     # run
