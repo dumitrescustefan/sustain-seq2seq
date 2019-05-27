@@ -11,8 +11,8 @@ For LSTM Encoder-Decoder:
 - [X] Add logging stuff + visual 
 - [X] Add TeacherForcing & decay, validate it
 - [ ] Add label smoothing
-- [ ] Validate global additive attention is working (plot heatmap for ro-en task)
-- [ ] Implement attention with several types (class name: Attention)
+- [X] Validate global additive attention is working (plot heatmap for ro-en task)
+- [ ] Implement attention with several types (class name: Attention) - in progress
 - [ ] Encoder with self attention (multihead) (class name: ---)
 - [ ] Decoder with self attention (multihead) (class name: ---)
 - [ ] Add coverage (see NMT coverage)
@@ -30,6 +30,7 @@ Other:
 - [X] Attention: bias is needed for computiation? Answer: Depends on case, mostly not
 - [ ] Attention: mask needed before softmax? Partial answer: will speed up convergence, in the end won't really matter. Still on it.
 - [ ] Transfer hidden=False not working, plus needs testing
+- [ ] AdditiveAttention.py -> reimplement in Attention.py and delete the file
 
 
 ## Validation scores:
