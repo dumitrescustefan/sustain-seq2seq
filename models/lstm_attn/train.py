@@ -10,12 +10,14 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 32
-    min_seq_len = 10
-    max_seq_len = 10000
+    batch_size = 4
+    min_seq_len = 5
+    max_seq_len = 500
 
-    from data.roen.loader import loader
-    data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
+    #from data.roen.loader import loader
+    #data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
+    from data.fren.loader import loader
+    data_folder = os.path.join("..", "..", "data", "fren", "ready")
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
@@ -46,7 +48,7 @@ if __name__ == "__main__":
                 enc_num_layers=2,
                 enc_dropout=0.2,
                 enc_lstm_dropout=0.2,
-                dec_input_dim=56, # must be equal to enc_hidden_dim
+                dec_input_dim=256, 
                 dec_emb_dim=300,
                 dec_hidden_dim=256,
                 dec_num_layers=2,

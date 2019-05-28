@@ -8,7 +8,65 @@ import numpy as np
 from models.util.validation_metrics import evaluate
 
 
-def get_freer_gpu():  
+import gc
+
+import torch
+
+## MEM utils ##
+def mem_report():
+    '''Report the memory usage of the tensor.storage in pytorch
+    Both on CPUs and GPUs are reported'''
+
+    def _mem_report(tensors, mem_type):
+        '''Print the selected tensors of type
+        There are two major storage types in our major concern:
+            - GPU: tensors transferred to CUDA devices
+            - CPU: tensors remaining on the system memory (usually unimportant)
+        Args:
+            - tensors: the tensors of specified type
+            - mem_type: 'CPU' or 'GPU' in current implementation '''
+        print('Storage on %s' %(mem_type))
+        print('-'*LEN)
+        total_numel = 0
+        total_mem = 0
+        visited_data = []
+        for tensor in tensors:
+            if tensor.is_sparse:
+                continue
+            # a data_ptr indicates a memory block allocated
+            data_ptr = tensor.storage().data_ptr()
+            if data_ptr in visited_data:
+                continue
+            visited_data.append(data_ptr)
+
+            numel = tensor.storage().size()
+            total_numel += numel
+            element_size = tensor.storage().element_size()
+            mem = numel*element_size /1024/1024 # 32bit=4Byte, MByte
+            total_mem += mem
+            element_type = type(tensor).__name__
+            size = tuple(tensor.size())
+
+            print('%s\t\t%s\t\t%.2f' % (
+                element_type,
+                size,
+                mem) )
+        print('-'*LEN)
+        print('Total Tensors: %d \tUsed Memory Space: %.2f MBytes' % (total_numel, total_mem) )
+        print('-'*LEN)
+
+    LEN = 65
+    print('='*LEN)
+    objects = gc.get_objects()
+    print('%s\t%s\t\t\t%s' %('Element type', 'Size', 'Used MEM(MBytes)') )
+    tensors = [obj for obj in objects if torch.is_tensor(obj)]
+    cuda_tensors = [t for t in tensors if t.is_cuda]
+    host_tensors = [t for t in tensors if not t.is_cuda]
+    _mem_report(cuda_tensors, 'GPU')
+    _mem_report(host_tensors, 'CPU')
+    print('='*LEN)
+
+def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID
     try:    
         import numpy as np
         os_string = subprocess.check_output("nvidia-smi -q -d Memory | grep -A4 GPU | grep Free", shell=True).decode("utf-8").strip().split("\n")    
@@ -95,19 +153,25 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("-" * 40)
 
 
-#def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
-def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
+def train_
+
+
+def trainer(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
           resume=False, max_epochs=100000, patience=10, lr=0.001,
           tf_start_ratio=0.5, tf_end_ratio=0., tf_epochs_decay=-1): # teacher forcing parameters
+    
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
-        os.makedirs(model_store_path)
+        os.makedirs(model_store_path)    
     
     log_path = os.path.join(model_store_path,"log")
     log_object = Log(log_path, clear=True)
     log_object.text("Training model: "+model.__class__.__name__)
     log_object.text("\tresume={}, patience={}, lr={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, lr, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
+    total_params = sum(p.numel() for p in model.parameters())/1000
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)/1000
+    log_object.text("\ttotal_parameters={}K, trainable_parameters={}K".format(total_params, trainable_params))
     log_object.text(model.__dict__)
     log_object.text()
         
@@ -115,8 +179,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    n_class = len(tgt_i2w)
-    batch_size = len(train_loader.dataset.X[0])
+    n_class = len(tgt_i2w)    
     current_epoch = 0
     current_patience = patience
     best_accuracy = 0.
@@ -135,6 +198,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         log_object.text(text)        
     
     while current_patience > 0 and current_epoch < max_epochs:        
+        #mem_report()
         print("_"*120+"\n")             
         
         # teacher forcing ratio for current epoch
@@ -152,47 +216,88 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         # train
         model.train()
-        total_loss = 0
-        t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="batches")
-        for batch_index, (x_batch, y_batch) in enumerate(t):        
-            if model.cuda:
-                x_batch = x_batch.cuda()
-                y_batch = y_batch.cuda()
+        total_loss, log_average_loss = 0, 0        
+        t = tqdm(total=train_loader.len, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="inst")        
+        current_batch_size = 2048
+        while train_loader.offset < train_loader.len:
+            #print("Current batch_size = {}, offset = {}".format(current_batch_size, train_loader.offset))
+            
+            oom = True
+            while oom: # try with this batch_size
+                x_batch, y_batch = train_loader.get_next_batch(current_batch_size)
+                try:
+                    if model.cuda:
+                        x_batch = x_batch.cuda()
+                        y_batch = y_batch.cuda()
 
-            optimizer.zero_grad()
+                    optimizer.zero_grad()
+                    
+                    # x_batch and y_batch shapes: [bs, padded_sequence]
+                    output, _ = model.forward(x_batch, y_batch, tf_ratio)
+                    # output shape: [bs, padded_sequence, n_class]
+                    
+                    loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+                    loss.backward()
+                    optimizer.step()
+                    
+                    total_loss += loss.data.item()
+                    log_average_loss = total_loss / (train_loader.offset+1)
+                    train_loader.offset += current_batch_size # advance to next batch
+                    t.update(current_batch_size)
+                    t.set_postfix(loss=log_average_loss, x_len=len(x_batch[-1]), y_len=len(y_batch[-1]), bs=current_batch_size)
+                    oom = False # exit loop and move to next batch 
+                    
+                    log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", train_loader.offset, torch.cuda.memory_allocated()/1024/1024, y_index=0)
+                    log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", train_loader.offset, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
+                    log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", train_loader.offset, torch.cuda.memory_cached()/1024/1024, y_index=2)
+                    log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", train_loader.offset, torch.cuda.max_memory_cached()/1024/1024, y_index=3)                    
+                    log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", train_loader.offset, len(x_batch[0])*10, y_index=4)
+                    log_object.draw()
+                    
+                    del output, x_batch, y_batch, loss
+                    
+                except RuntimeError as e:
+                    if 'out of memory' in str(e):
+                        current_batch_size = current_batch_size / 2
+                        if current_batch_size < 1.:
+                            print("FATAL: Cannot further reduce batch, exiting ...")
+                            sys.exit(1)
+                        current_batch_size = int(current_batch_size)
+                        print('\n\tWARNING: ran out of memory, retrying with smaller batch size = '+str(current_batch_size))
+                        try:
+                            del output
+                        except:
+                            pass
+                        try:
+                            del x_batch
+                        except:
+                            pass
+                        try:
+                            del y_batch
+                        except:
+                            pass
+                        try:
+                            del loss
+                        except:
+                            pass
+                        torch.cuda.empty_cache()
+            #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0])) 
             
-            # x_batch and y_batch shapes: [bs, padded_sequence]
-            output, _ = model.forward(x_batch, y_batch, tf_ratio)
-            # output shape: [bs, padded_sequence, n_class]
             
-            loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
-            loss.backward()
-            optimizer.step()
-            
-            total_loss += loss.data.item()
-            log_average_loss = total_loss / (batch_index+1)
-            t.set_postfix(loss=log_average_loss) 
-            
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.memory_allocated()/1024/1024, y_index=0)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.memory_cached()/1024/1024, y_index=2)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
-            log_object.draw()
-            
-            if model.cuda:                        
-                torch.cuda.synchronize()
+            #if model.cuda:                        
+            #    torch.cuda.synchronize()
                             
-        del t, loss, output
+        del t
         gc.collect()
         
         if model.cuda:
             torch.cuda.empty_cache()
         
-        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_allocated()/1024/1024, y_index=0)
-        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
-        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_cached()/1024/1024, y_index=2)
-        log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
-        log_object.draw()
+        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_allocated()/1024/1024, y_index=0)
+        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
+        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_cached()/1024/1024, y_index=2)
+        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
+        #log_object.draw()
         
         log_object.text("\ttraining_loss={}".format(log_average_loss))
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
@@ -208,7 +313,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             y_gold = list()
             y_predicted = list()
             
-            for batch_index, (x_batch, y_batch) in enumerate(t):            
+            for batch_index, (x_batch, y_batch) in enumerate(t):                            
                 if model.cuda:
                     x_batch = x_batch.cuda()
                     y_batch = y_batch.cuda()

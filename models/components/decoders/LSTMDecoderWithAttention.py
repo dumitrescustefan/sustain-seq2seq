@@ -21,7 +21,8 @@ class LSTMDecoderWithAttention(LSTMDecoder):
         """
 
         super(LSTMDecoderWithAttention, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
-
+        
+        self.n_class = n_class
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, device=device, type=attention_type)
 
         self.to(device)
@@ -35,7 +36,7 @@ class LSTMDecoderWithAttention(LSTMDecoder):
         attention_weights = []
         
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
-        output = torch.Tensor().to(self.device)
+        output = torch.zeros(batch_size,seq_len_dec-1,self.n_class).to(self.device)
         output.requires_grad=False
         
         # Loop over the rest of tokens in the input seq_len_dec.
@@ -71,9 +72,12 @@ class LSTMDecoderWithAttention(LSTMDecoder):
             lin_output = self.output_linear(dec_output)
 
             # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
-            output = torch.cat((output, lin_output), dim=1)
-
-
+            #output = torch.cat((output, lin_output), dim=1)
+            #print(output[:,i,:])            
+            output[:,i,:] = lin_output.squeeze(1)
+            #print(output[:,i,:])
+            #print(i)
+            #print(seq_len_dec)
         # output is a tensor [batch_size, seq_len_dec, n_class]
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
         return output, attention_weights

@@ -144,7 +144,7 @@ class Attention(nn.Module):
         # get K, V, Q
         K = self.key_annotation_function(enc_output) # [batch_size, seq_len, encoder_size]
         V = self.value_annotation_function(enc_output) # [batch_size, seq_len, encoder_size]
-        Q = self.query_annotation_function(state_h) # [batch_size, 1, decoder_size]
+        Q = self.query_annotation_function(state_h) # [batch_size, 1, encoder_size]
         
         # calculate energy
         energy = self._energy(K,Q) # [batch_size, seq_len, 1]        
