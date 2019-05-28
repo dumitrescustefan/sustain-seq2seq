@@ -3,6 +3,8 @@
 ## Road-map:
 
 - [X] Refactor models into components
+- [ ] Rewrite loaders with VariableLoader, make it compatible with Pytorch dataloader
+- [ ] Rewrite training procedure with variable batch size for GPU training (avoid OOM errors)
 
 For LSTM Encoder-Decoder:
 
@@ -15,7 +17,7 @@ For LSTM Encoder-Decoder:
 - [ ] Implement attention with several types (class name: Attention) - in progress
 - [ ] Encoder with self attention (multihead) (class name: ---)
 - [ ] Decoder with self attention (multihead) (class name: ---)
-- [ ] Add coverage (see NMT coverage)
+- [ ] Add coverage (see NMT coverage), validate it
 - [ ] Implement beam search with length penalty 
 - [ ] Nice and clean run script, that takes strings as input and outputs strings back (i.e full process)
 
