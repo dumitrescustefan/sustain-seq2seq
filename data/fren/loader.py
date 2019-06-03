@@ -1,4 +1,4 @@
-import os, sys, json
+import os, sys, json, random
 import numpy as np
 import torch
 import torch.utils.data
@@ -47,10 +47,32 @@ class BiDataset(torch.utils.data.Dataset):
         self.X, self.y = ( list(t) for t in zip(*sorted(zip(self.X, self.y), key=lambda x: len(x[0]) ) ) )
         print("\tSorted {} set. Largest X sequence = {}, smallest = {}".format(type, len(self.X[-1]), len(self.X[0])))
         
-        
-        #print(type(self.X[0]))
-        #print("---------------")
-        #self.X = [[1,2,3],[2,3,4]]
+        # move last 25% of mass to end of dataset
+        total_mass = sum([len(elem) for elem in self.X])
+        accumulation = 0
+        index = len(self.X)-1
+        while accumulation<total_mass/4:
+            accumulation += len(self.X[index])
+            index -= 1
+        last_25_mass_X = self.X[index:]
+        last_25_mass_y = self.y[index:]
+        self.X = self.X[:index]
+        self.y = self.y[:index]        
+        # shuffle first part
+        c = list(zip(self.X, self.y))
+        random.shuffle(c)
+        self.X, self.y = zip(*c)
+        self.X = list(self.X)
+        self.y = list(self.y)
+        # shuffle last part
+        c = list(zip(last_25_mass_X, last_25_mass_y))
+        random.shuffle(c)
+        last_25_mass_X, last_25_mass_y = zip(*c)        
+        last_25_mass_X = list(last_25_mass_X)
+        last_25_mass_y = list(last_25_mass_y)        
+        # rejoin
+        self.X = self.X + last_25_mass_X
+        self.y = self.y + last_25_mass_y
         
         self.conf = json.load(open(os.path.join(root_dir,"preprocess_settings.json")))
         self.src_w2i = json.load(open(os.path.join(root_dir,"fr_word2index.json")))
@@ -76,11 +98,11 @@ class VariableDataLoader():
         if self.offset >= self.len:
             raise Exception("Attempted to access instances with offset >= length")
         start = self.offset 
-        stop = min(self.offset+batch_size, self.len)
+        stop = min(self.offset+batch_size, self.len)        
         X = self.dataset.X[start:stop].copy()
         y = self.dataset.y[start:stop].copy()
         
-        X_max_seq_len = max(len(X[0]), len(X[-1])) # max no matter which way X is sorted
+        X_max_seq_len = max(len(inst) for inst in X) # max no matter which way X is sorted
         y_max_seq_len = max(len(inst) for inst in y) # determines max size for all examples in y (not sorted)
         
         X = torch.LongTensor(  [ inst + [0] * (X_max_seq_len - len(inst)) for inst in X ]  )

@@ -10,15 +10,16 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 4
-    min_seq_len = 5
-    max_seq_len = 500
+    batch_size = 64
+    min_seq_len = 10
+    max_seq_len = 80
 
     #from data.roen.loader import loader
     #data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
-    from data.fren.loader import loader
+    #from data.fren.loader import loader
+    from models.util.loaders.standard import loader
     data_folder = os.path.join("..", "..", "data", "fren", "ready")
-    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, min_seq_len, max_seq_len)
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
