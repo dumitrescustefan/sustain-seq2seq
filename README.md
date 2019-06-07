@@ -2,13 +2,14 @@
 
 ## Road-map:
 
-- [X] Refactor models into components
-- [ ] Rewrite loaders with VariableLoader, make it compatible with Pytorch dataloader
-- [ ] Rewrite training procedure with variable batch size for GPU training (avoid OOM errors)
+- [X] [Deprecated] Refactor models into components
+- [X] Rewrite loaders with VariableLoader, make it compatible with Pytorch dataloader -> not worth it for now.
+- [X] Rewrite training procedure with variable batch size for GPU training (avoid OOM errors) -> tried, not worth it for now.
+- [ ] Pretrained word embeddings -> separate module maybe?
 
 For LSTM Encoder-Decoder:
 
-- [X] Validate LSTM EncoderDecoder with AdditiveAttention
+- [X] [Deprecated] Validate LSTM EncoderDecoder with AdditiveAttention
 - [X] Add validation measures (BLEU, CIDEr, etc)
 - [X] Add logging stuff + visual 
 - [X] Add TeacherForcing & decay, validate it
@@ -17,6 +18,7 @@ For LSTM Encoder-Decoder:
 - [ ] Implement attention with several types (class name: Attention) - in progress
 - [ ] Encoder with self attention (multihead) (class name: ---)
 - [ ] Decoder with self attention (multihead) (class name: ---)
+- [ ] L2 weight regularization
 - [ ] Add coverage (see NMT coverage), validate it
 - [ ] Implement beam search with length penalty 
 - [ ] Nice and clean run script, that takes strings as input and outputs strings back (i.e full process)
@@ -27,13 +29,13 @@ For Transformer:
 
 Other:
 - [X] add dummy reverse sequence dataset 
-- [ ] Validation measures: input tokenization required? 
+- [ ] Validation measures: input tokenization required? Validate it.
 - [X] Attention: bias is needed for KQV transformations? Answer: guess not
 - [X] Attention: bias is needed for computiation? Answer: Depends on case, mostly not
 - [ ] Attention: mask needed before softmax? Partial answer: will speed up convergence, in the end won't really matter. Still on it.
 - [ ] Transfer hidden=False not working, plus needs testing
 - [ ] AdditiveAttention.py -> reimplement in Attention.py and delete the file
-
+- [ ] Single loader in models/utils that loads lists of numbers + additional w2i file
 
 ## Validation scores:
 
