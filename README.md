@@ -22,6 +22,7 @@ For LSTM Encoder-Decoder:
 - [ ] Add coverage (see NMT coverage), validate it
 - [ ] Implement beam search with length penalty 
 - [ ] Nice and clean run script, that takes strings as input and outputs strings back (i.e full process)
+- [ ] Add temperature in the softmax of the decoder
 
 For Transformer: 
 
