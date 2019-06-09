@@ -38,6 +38,7 @@ Other:
 - [ ] AdditiveAttention.py -> reimplement in Attention.py and delete the file
 - [ ] Single loader in models/utils that loads lists of numbers + additional w2i file
 - [ ] Tied embedding weights, investigate it
+- [ ] Optimizer: Learning rate scheduler, superconvergence, warm restart si cyclical LR. Implement scheduler. *Priority*
 
 ## Validation scores:
 
