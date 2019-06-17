@@ -68,7 +68,7 @@ class RNNEncoderDecoder(nn.Module):
         if self.dec_transfer_hidden == True:
             dec_states = self.transfer_hidden_from_encoder_to_decoder(enc_states)
         else:
-            pass  # dec_state = (,) # TODO initial zero, apoi random-xavier, trebuie sa incercam
+            pass  # dec_state = (,) # TODO initial zero, trebuie sa incercam
 
         # Calculates the output of the decoder.
         output, attention_weights = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)

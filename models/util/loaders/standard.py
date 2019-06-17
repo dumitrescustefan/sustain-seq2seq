@@ -14,22 +14,22 @@ BOS_WORD = '<BOS>'
 EOS_WORD = '<EOS>'
 
 
-def loader(data_folder, batch_size, max_seq_len = 100000, min_seq_len = 5):
+def loader(data_folder, batch_size, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):
     train_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "train", max_seq_len, min_seq_len),
+        BiDataset(data_folder, "train", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
         collate_fn=simple_paired_collate_fn,
         shuffle=True)
 
     valid_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "dev", max_seq_len, min_seq_len),
+        BiDataset(data_folder, "dev", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
         collate_fn=simple_paired_collate_fn)
     
     test_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "test", max_seq_len, min_seq_len),
+        BiDataset(data_folder, "test", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
         collate_fn=simple_paired_collate_fn)
@@ -57,7 +57,7 @@ def simple_collate_fn(insts):
         
     
 class BiDataset(torch.utils.data.Dataset):
-    def __init__(self, root_dir, type = "train", min_seq_len = 5, max_seq_len = 100000):  
+    def __init__(self, root_dir, type = "train", min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):  
         self.root_dir = root_dir
 
         X = torch.load(os.path.join(root_dir,type+"_X.pt"))
@@ -65,16 +65,22 @@ class BiDataset(torch.utils.data.Dataset):
         
         self.X = []
         self.y = []
-        cut_over = 0
-        cut_under = 0
+        cut_over_X = 0
+        cut_under_X = 0
+        cut_over_y = 0
+        cut_under_y = 0
         
         
         # max len
         for (sx, sy) in zip(X,y):
-            if len(sx) > max_seq_len:
-                cut_over += 1
-            elif len(sx) < min_seq_len+2:                
-                cut_under += 1
+            if len(sx) > max_seq_len_X:
+                cut_over_X += 1
+            elif len(sx) < min_seq_len_X+2:                
+                cut_under_X += 1
+            elif len(sy) > max_seq_len_y:
+                cut_over_y += 1
+            elif len(sy) < min_seq_len_y+2:                
+                cut_under_y += 1
             else:
                 self.X.append(sx)
                 self.y.append(sy)                    
@@ -85,7 +91,9 @@ class BiDataset(torch.utils.data.Dataset):
         self.X = list(self.X)
         self.y = list(self.y)
                     
-        print("Dataset [{}] loaded with {} out of {} ({}%) sequences. {} are over max_len {} and {} are under min_len {}.".format(type, len(self.X), len(X), float(100.*len(self.X)/len(X)), cut_over, max_seq_len, cut_under, min_seq_len))
+        print("Dataset [{}] loaded with {} out of {} ({}%) sequences.".format(type, len(self.X), len(X), float(100.*len(self.X)/len(X)) ) )
+        print("\t\t For X, {} are over max_len {} and {} are under min_len {}.".format(cut_over_X, max_seq_len_X, cut_under_X, min_seq_len_X))
+        print("\t\t For y, {} are over max_len {} and {} are under min_len {}.".format(cut_over_y, max_seq_len_y, cut_under_y, min_seq_len_y))
         
         assert(len(self.X)==len(self.y))
         

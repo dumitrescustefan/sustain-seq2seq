@@ -66,7 +66,7 @@ def mem_report():
     _mem_report(host_tensors, 'CPU')
     print('='*LEN)
 
-def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID
+def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
     try:    
         import numpy as np
         os_string = subprocess.check_output("nvidia-smi -q -d Memory | grep -A4 GPU | grep Free", shell=True).decode("utf-8").strip().split("\n")    
@@ -175,7 +175,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     print("Working in folder [{}]".format(model_store_path))
     
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    #optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
@@ -215,9 +216,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         # train
         model.train()
         total_loss, log_average_loss = 0, 0        
-        t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="batches")
+        t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b")
         for batch_index, (x_batch, y_batch) in enumerate(t):        
-            t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
+            #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
             if model.cuda:
                 x_batch = x_batch.cuda()
                 y_batch = y_batch.cuda()
@@ -229,12 +230,25 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             # output shape: [bs, padded_sequence, n_class]
             
             loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+            """iloss = loss.item()
+            
+            # L2 regularization on attention
+            l2_lambda = 0.0001
+            l2_reg = torch.tensor(0.).to(model.device)            
+            for p in model.decoder.attention.parameters():
+            #    loss += l2_lambda*p.pow(2).sum()           
+                 l2_reg += torch.norm(p).item()            
+            #    loss += l2_lambda*(torch.abs(p).sum())
+            iloss_l2 = l2_lambda * l2_reg.item()#loss.item()-iloss            
+            loss += l2_lambda * l2_reg
+            """
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.) # parametrize clip value TODO, also what is a good value? 0.1, 0.5, 1 or 5?
             optimizer.step()
             
-            total_loss += loss.data.item()
+            total_loss += loss.item()
             log_average_loss = total_loss / (batch_index+1)
-            #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0])) 
+            t.set_postfix(loss=log_average_loss, x_y_len=str(len(x_batch[0]))+"/"+str(len(y_batch[0])) )#, iloss = iloss, iloss_l2 = iloss_l2)             
             
             """log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.memory_allocated()/1024/1024, y_index=0)
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
@@ -245,7 +259,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.draw()
             """
             
-            del output, x_batch, y_batch, loss
+            del output, x_batch, y_batch, loss #, l2_reg
             #torch.cuda.empty_cache()
             #if model.cuda:                        
             #    torch.cuda.synchronize()
@@ -269,33 +283,36 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         # dev        
         if valid_loader is not None:
             model.eval()
-            total_loss = 0
-            _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
+            with torch.no_grad():
+                total_loss = 0
+                _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
 
-            t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="batches")
-            y_gold = list()
-            y_predicted = list()
-            
-            for batch_index, (x_batch, y_batch) in enumerate(t):                            
-                if model.cuda:
-                    x_batch = x_batch.cuda()
-                    y_batch = y_batch.cuda()
+                t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
+                y_gold = list()
+                y_predicted = list()
+                
+                for batch_index, (x_batch, y_batch) in enumerate(t):                            
+                    if model.cuda:
+                        x_batch = x_batch.cuda()
+                        y_batch = y_batch.cuda()
 
-                output, batch_attention_weights = model.forward(x_batch, y_batch)
-                loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
-                
-                y_predicted_batch = output.argmax(dim=2)
-                y_gold += y_batch.tolist()
-                y_predicted += y_predicted_batch.tolist()                
-                
-                total_loss += loss.data.item()
-                log_average_loss = total_loss / (batch_index+1)
-                t.set_postfix(loss=log_average_loss) 
-                
+                    output, batch_attention_weights = model.forward(x_batch, y_batch)
+                    loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+                    
+                    y_predicted_batch = output.argmax(dim=2)
+                    y_gold += y_batch.tolist()
+                    y_predicted += y_predicted_batch.tolist()                
+                    
+                    total_loss += loss.data.item()
+                    log_average_loss = total_loss / (batch_index+1)
+                    t.set_postfix(loss=log_average_loss) 
+                    
+                    del output, loss
+                    
                 if model.cuda:
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
-                    
+                        
             log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
@@ -321,7 +338,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             _plot_attention_weights(x_batch, y_batch, src_i2w, tgt_i2w, batch_attention_weights, current_epoch, log_object)
             
             # dev cleanup
-            del t, loss, output, y_predicted_batch
+            del t, y_predicted_batch, y_gold, y_predicted
             
         else: # disable patience if no dev provided and always save model 
             current_patience = patience

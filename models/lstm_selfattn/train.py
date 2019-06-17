@@ -2,7 +2,7 @@
 import os, sys
 sys.path.insert(0, '../..')
 
-from models.lstm_attn.model import LSTMEncoderDecoderWithAttention
+from models.lstm_selfattn.model import LSTMEncoderDecoderWithAttentionAndSelfAttention
 from models.util.trainer import train, get_freer_gpu
 import torch
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     
     # MODEL TRAINING #######################################################
     
-    model = LSTMEncoderDecoderWithAttention(
+    model = LSTMEncoderDecoderWithAttentionAndSelfAttention(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=300,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
@@ -71,11 +71,11 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
-          resume = False, 
+          model_store_path = os.path.join("..", "..", "train", "lstm_selfattn"), 
+          resume = True, 
           max_epochs = 150, 
           patience = 150, 
-          lr = 3e-4,#0.001,
+          lr = 0.001,
           tf_start_ratio=0.6,
           tf_end_ratio=0.1,
           tf_epochs_decay=30)
