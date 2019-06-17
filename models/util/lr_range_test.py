@@ -93,7 +93,7 @@ class LRFinder(object):
                 occurs. Default: 100.
             step_mode (str, optional): one of the available learning rate policies,
                 linear or exponential ("linear", "exp"). Default: "exp".
-            smooth_f (float, optional): the loss smoothing factor within the [0, 1[
+            smooth_f (float, optional): the loss smoothing factor within the [0, 1]
                 interval. Disabled if set to 0, otherwise the loss is smoothed using
                 exponential smoothing. Default: 0.05.
             diverge_th (int, optional): the test is stopped when the loss surpasses the
@@ -116,11 +116,11 @@ class LRFinder(object):
             raise ValueError("expected one of (exp, linear), got {}".format(step_mode))
 
         if smooth_f < 0 or smooth_f >= 1:
-            raise ValueError("smooth_f is outside the range [0, 1[")
+            raise ValueError("smooth_f is outside the range [0, 1)")
 
         # Create an iterator to get data batch by batch
         iterator = iter(train_loader)
-        for iteration in tqdm(range(num_iter)):
+        for iteration in tqdm(range(num_iter), unit="batches"):
             # Get a new set of inputs and labels
             try:
                 inputs, labels = next(iterator)
@@ -152,7 +152,7 @@ class LRFinder(object):
                 print("Stopping early, the loss has diverged")
                 break
 
-        print("Learning rate search finished. See the graph with {finder_name}.plot()")
+        print("Learning rate search finished.")
 
     def _train_batch(self, inputs, labels):
         # Set model to training mode
@@ -164,8 +164,9 @@ class LRFinder(object):
 
         # Forward pass
         self.optimizer.zero_grad()
-        outputs = self.model(inputs)
-        loss = self.criterion(outputs, labels)
+        outputs, _ = self.model(inputs, labels) # skipping attention weights
+        #loss = self.criterion(outputs, labels)
+        loss = self.criterion(outputs.view(-1, self.model.dec_vocab_size), labels.contiguous().flatten())
 
         # Backward pass
         loss.backward()
@@ -196,7 +197,7 @@ class LRFinder(object):
         Arguments:
             skip_start (int, optional): number of batches to trim from the start.
                 Default: 10.
-            skip_end (int, optional): number of batches to trim from the start.
+            skip_end (int, optional): number of batches to trim from the end.
                 Default: 5.
             log_lr (bool, optional): True to plot the learning rate in a logarithmic
                 scale; otherwise, plotted in a linear scale. Default: True.
@@ -220,12 +221,22 @@ class LRFinder(object):
             losses = losses[skip_start:-skip_end]
 
         # Plot loss as a function of the learning rate
+        fig = plt.figure(figsize=(18, 16)) 
+        print(lrs)
         plt.plot(lrs, losses)
         if log_lr:
             plt.xscale("log")
         plt.xlabel("Learning rate")
         plt.ylabel("Loss")
-        plt.show()
+        #plt.stem(lrs, losses)
+        #plt.set_xticks(range(lrs[0],lrs[-1], 5) )
+        #fig, ax
+        #plt.xticks(range(lrs[0],lrs[-1], 5) )
+        #plt.show()
+        
+        fig.savefig("lr_range_test.png", bbox_inches='tight')
+        plt.clf()
+        plt.close()
 
 
 class LinearLR(_LRScheduler):
