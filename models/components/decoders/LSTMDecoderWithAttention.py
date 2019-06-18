@@ -70,14 +70,14 @@ class LSTMDecoderWithAttention(LSTMDecoder):
             # Maps the decoder output to the decoder vocab size space. 
             # [batch_size, 1, hidden_dim] -> [batch_size, 1, n_class].
             lin_output = self.output_linear(dec_output)
+            
+            # sigmoid on output to be compatible with cross_entropy and prevent NaNs
+            lin_output = torch.sigmoid(lin_output)
 
             # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
-            #output = torch.cat((output, lin_output), dim=1)
-            #print(output[:,i,:])            
+            #output = torch.cat((output, lin_output), dim=1)            
             output[:,i,:] = lin_output.squeeze(1)
-            #print(output[:,i,:])
-            #print(i)
-            #print(seq_len_dec)
+            
         # output is a tensor [batch_size, seq_len_dec, n_class]
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
         return output, attention_weights

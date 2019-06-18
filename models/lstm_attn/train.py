@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # ######################################################################
     
     # MODEL TRAINING #######################################################
-    
+        
     model = LSTMEncoderDecoderWithAttention(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=300,
@@ -65,6 +65,16 @@ if __name__ == "__main__":
     print(model)
     print("_"*80+"\n")
     
+    
+    optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9)
+    from models.util.lr_scheduler import cyclical_lr
+    end_lr = 3.
+    step_size = len(train_loader)
+    factor = 10
+    clr = cyclical_lr(step_size, min_lr=end_lr/factor, max_lr=end_lr) #, decay_factor_per_step=.97)
+    print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
+      
     train(model, 
           src_i2w, 
           tgt_i2w,
@@ -75,7 +85,8 @@ if __name__ == "__main__":
           resume = False, 
           max_epochs = 150, 
           patience = 150, 
-          lr = 3e-4,#0.001,
+          optimizer = optimizer,
+          lr_scheduler = lr_scheduler,
           tf_start_ratio=0.6,
           tf_end_ratio=0.1,
           tf_epochs_decay=30)

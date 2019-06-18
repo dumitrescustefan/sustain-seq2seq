@@ -6,8 +6,65 @@ from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 import numpy as np
 from models.util.validation_metrics import evaluate
+
+
 import gc
+
 import torch
+
+## MEM utils ##
+def mem_report():
+    '''Report the memory usage of the tensor.storage in pytorch
+    Both on CPUs and GPUs are reported'''
+
+    def _mem_report(tensors, mem_type):
+        '''Print the selected tensors of type
+        There are two major storage types in our major concern:
+            - GPU: tensors transferred to CUDA devices
+            - CPU: tensors remaining on the system memory (usually unimportant)
+        Args:
+            - tensors: the tensors of specified type
+            - mem_type: 'CPU' or 'GPU' in current implementation '''
+        print('Storage on %s' %(mem_type))
+        print('-'*LEN)
+        total_numel = 0
+        total_mem = 0
+        visited_data = []
+        for tensor in tensors:
+            if tensor.is_sparse:
+                continue
+            # a data_ptr indicates a memory block allocated
+            data_ptr = tensor.storage().data_ptr()
+            if data_ptr in visited_data:
+                continue
+            visited_data.append(data_ptr)
+
+            numel = tensor.storage().size()
+            total_numel += numel
+            element_size = tensor.storage().element_size()
+            mem = numel*element_size /1024/1024 # 32bit=4Byte, MByte
+            total_mem += mem
+            element_type = type(tensor).__name__
+            size = tuple(tensor.size())
+
+            print('%s\t\t%s\t\t%.2f' % (
+                element_type,
+                size,
+                mem) )
+        print('-'*LEN)
+        print('Total Tensors: %d \tUsed Memory Space: %.2f MBytes' % (total_numel, total_mem) )
+        print('-'*LEN)
+
+    LEN = 65
+    print('='*LEN)
+    objects = gc.get_objects()
+    print('%s\t%s\t\t\t%s' %('Element type', 'Size', 'Used MEM(MBytes)') )
+    tensors = [obj for obj in objects if torch.is_tensor(obj)]
+    cuda_tensors = [t for t in tensors if t.is_cuda]
+    host_tensors = [t for t in tensors if not t.is_cuda]
+    _mem_report(cuda_tensors, 'GPU')
+    _mem_report(host_tensors, 'CPU')
+    print('='*LEN)
 
 def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
     try:    
@@ -98,8 +155,8 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
 
 #def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
-          resume=False, max_epochs=100000, patience=10, optimizer=None, lr_scheduler=None,
-          tf_start_ratio=0., tf_end_ratio=0., tf_epochs_decay=0): # teacher forcing parameters
+          resume=False, max_epochs=100000, patience=10, lr=0.001,
+          tf_start_ratio=0.5, tf_end_ratio=0., tf_epochs_decay=-1): # teacher forcing parameters
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
@@ -108,7 +165,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_path = os.path.join(model_store_path,"log")
     log_object = Log(log_path, clear=True)
     log_object.text("Training model: "+model.__class__.__name__)
-    log_object.text("\tresume={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
+    log_object.text("\tresume={}, patience={}, lr={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, lr, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
     total_params = sum(p.numel() for p in model.parameters())/1000
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)/1000
     log_object.text("\ttotal_parameters={}K, trainable_parameters={}K".format(total_params, trainable_params))
@@ -119,7 +176,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     #optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
@@ -186,19 +243,12 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             loss += l2_lambda * l2_reg
             """
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.) # parametrize clip value TODO, also what is a good value? 0.1, 0.5, 1 or 5?            
-            if lr_scheduler is not None:
-                lr_scheduler.step()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.) # parametrize clip value TODO, also what is a good value? 0.1, 0.5, 1 or 5?
             optimizer.step()
-             
+            
             total_loss += loss.item()
             log_average_loss = total_loss / (batch_index+1)
-            
-            current_scheduler_lr = "-"
-            if lr_scheduler is not None:
-                current_scheduler_lr = lr_scheduler.get_lr()[0]
-            
-            t.set_postfix(loss=log_average_loss, x_y_len=str(len(x_batch[0]))+"/"+str(len(y_batch[0])) , lr = current_scheduler_lr)#, iloss = iloss, iloss_l2 = iloss_l2)             
+            t.set_postfix(loss=log_average_loss, x_y_len=str(len(x_batch[0]))+"/"+str(len(y_batch[0])) )#, iloss = iloss, iloss_l2 = iloss_l2)             
             
             """log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.memory_allocated()/1024/1024, y_index=0)
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
