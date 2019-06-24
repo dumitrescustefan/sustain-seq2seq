@@ -10,18 +10,15 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 256
-    min_seq_len_X = 10
-    max_seq_len_X = 30
-    min_seq_len_y = min_seq_len_X
-    max_seq_len_y = max_seq_len_X
+    batch_size = 4
+    min_seq_len = 5
+    max_seq_len = 500
 
     #from data.roen.loader import loader
     #data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
-    #from data.fren.loader import loader
-    from models.util.loaders.standard import loader
+    from data.fren.loader import loader
     data_folder = os.path.join("..", "..", "data", "fren", "ready")
-    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -43,20 +40,20 @@ if __name__ == "__main__":
     # ######################################################################
     
     # MODEL TRAINING #######################################################
-        
+    
     model = LSTMEncoderDecoderWithAttention(
                 enc_vocab_size=len(src_w2i),
-                enc_emb_dim=256,
+                enc_emb_dim=300,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
-                enc_num_layers=1,
-                enc_dropout=0.33,
-                enc_lstm_dropout=0.33,
+                enc_num_layers=2,
+                enc_dropout=0.2,
+                enc_lstm_dropout=0.2,
                 dec_input_dim=256, 
-                dec_emb_dim=256,
+                dec_emb_dim=300,
                 dec_hidden_dim=256,
-                dec_num_layers=1,
-                dec_dropout=0.33,
-                dec_lstm_dropout=0.33,
+                dec_num_layers=2,
+                dec_dropout=0.2,
+                dec_lstm_dropout=0.2,
                 dec_vocab_size=len(tgt_w2i),
                 dec_attention_type = "additive",
                 dec_transfer_hidden=True)
@@ -65,19 +62,6 @@ if __name__ == "__main__":
     print(model)
     print("_"*80+"\n")
     
-    """
-    optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9)
-    from models.util.lr_scheduler import cyclical_lr
-    end_lr = 500.
-    step_size = len(train_loader)
-    factor = 4
-    clr = cyclical_lr(step_size, min_lr=end_lr/factor, max_lr=end_lr) #, decay_factor_per_step=.97)
-    print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
-    """
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
-    lr_scheduler = None
-    
     train(model, 
           src_i2w, 
           tgt_i2w,
@@ -85,13 +69,12 @@ if __name__ == "__main__":
           valid_loader,
           test_loader,                          
           model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
-          resume = False, 
-          max_epochs = 550, 
-          patience = 550, 
-          optimizer = optimizer,
-          lr_scheduler = lr_scheduler,
-          tf_start_ratio=0.9,
+          resume = True, 
+          max_epochs = 50, 
+          patience = 50, 
+          lr = 0.001,
+          tf_start_ratio=1.,
           tf_end_ratio=0.1,
-          tf_epochs_decay=50)
+          tf_epochs_decay=30)
           
     # ######################################################################

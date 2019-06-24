@@ -172,7 +172,20 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             output, _ = model.forward(x_batch, y_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             
+            if torch.isnan(output).sum()>0:
+                print("FOUND NAN in output")
+                print(output)
+                print(loss)
+                sys.exit(1)
+                
+            
             loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+            
+            if torch.isnan(loss).sum()>0:
+                print("FOUND NAN in loss")
+                print(output)
+                print(loss)
+                sys.exit(1)
             """iloss = loss.item()
             
             # L2 regularization on attention
@@ -198,7 +211,12 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             if lr_scheduler is not None:
                 current_scheduler_lr = lr_scheduler.get_lr()[0]
             
-            t.set_postfix(loss=log_average_loss, x_y_len=str(len(x_batch[0]))+"/"+str(len(y_batch[0])) , lr = current_scheduler_lr)#, iloss = iloss, iloss_l2 = iloss_l2)             
+            t.set_postfix(loss=log_average_loss, x_y_len=str(len(x_batch[0]))+"/"+str(len(y_batch[0])) , lr = current_scheduler_lr, cur_loss = loss.item())#, iloss = iloss, iloss_l2 = iloss_l2)             
+            
+            #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, loss.item(), y_index = 0)
+            #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, current_scheduler_lr, y_index = 1)
+            #log_object.draw()
+            #log_object.draw(last_quarter=True)
             
             """log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.memory_allocated()/1024/1024, y_index=0)
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)

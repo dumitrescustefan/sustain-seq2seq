@@ -7,9 +7,9 @@ import numpy as np
 
 from models.components.attention.Attention import Attention
 from models.components.decoders.LSTMDecoder import LSTMDecoder
+from models.components.attention.MultiHeadAttention import MultiHeadAttention
 
-
-class LSTMDecoderWithAttention(LSTMDecoder):
+class LSTMDecoderWithAttentionAndSelfAttention(LSTMDecoder):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, attention_type, device):
         """
         Creates a Decoder with attention.
@@ -20,11 +20,15 @@ class LSTMDecoderWithAttention(LSTMDecoder):
             see LSTMDecoder for further args info
         """
 
-        super(LSTMDecoderWithAttention, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
+        super(LSTMDecoderWithAttentionAndSelfAttention, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
         
         self.n_class = n_class
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, device=device, type=attention_type)
 
+        num_heads = 8 # TODO parametrize this
+        assert hidden_dim % num_heads == 0, "LSTMDecoderWithAttentionAndSelfAttention hidden_dim ({}) should be a multiple of num_heads ({}).".format(hidden_dim, num_heads)        
+        self.self_attention = MultiHeadAttention(d_model=hidden_dim, num_heads=num_heads, dropout=dropout)
+        
         self.to(device)
 
     def forward(self, input, enc_output, dec_states, teacher_forcing_ratio):
@@ -63,12 +67,15 @@ class LSTMDecoderWithAttention(LSTMDecoder):
                 # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
                 lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
 
+self_attn = self.self_attention(q=output, k=output, v=output, mask=None)
+        
+
             # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
             # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
             dec_output, dec_states = self.lstm(lstm_input, dec_states)
 
-            # Maps the decoder output to the decoder vocab size space. 
             # [batch_size, 1, hidden_dim] -> [batch_size, 1, n_class].
+            # Maps the decoder output to the decoder vocab size space. 
             lin_output = self.output_linear(dec_output)            
 
             # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].

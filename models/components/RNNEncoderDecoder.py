@@ -45,8 +45,8 @@ class RNNEncoderDecoder(nn.Module):
                             n_class=dec_vocab_size, lstm_dropout=dec_lstm_dropout, dropout=dec_dropout, attention_type=dec_attention_type, device=self.device)
 
         # Transform h from encoder's [num_layers * 2, batch_size, enc_hidden_dim/2] to decoder's [num_layers * 1, batch_size, dec_hidden_dim], same for c; batch_size = 1 (last timestep only)
-        self.h_state_linear = nn.Linear(enc_hidden_dim * enc_num_layers, dec_hidden_dim * dec_num_layers * 1)
-        self.c_state_linear = nn.Linear(enc_hidden_dim * enc_num_layers, dec_hidden_dim * dec_num_layers * 1)
+        self.h_state_linear = nn.Linear(int(enc_hidden_dim * enc_num_layers/1), dec_hidden_dim * dec_num_layers * 1)
+        self.c_state_linear = nn.Linear(int(enc_hidden_dim * enc_num_layers/1), dec_hidden_dim * dec_num_layers * 1)
 
         self.to(self.device)
 

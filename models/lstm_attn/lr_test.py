@@ -61,7 +61,7 @@ if __name__ == "__main__":
                 dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
                 dec_attention_type = "additive",
-                dec_transfer_hidden=True)
+                dec_transfer_hidden = True)
     
     print("_"*80+"\n")
     print(model)
@@ -69,12 +69,12 @@ if __name__ == "__main__":
 
 
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9) #optim.Adam(net.parameters(), lr=1e-7, weight_decay=1e-2)
-    #optimizer = torch.optim.Adam(model.parameters(), lr=1e-7, weight_decay=1e-2)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9) #optim.Adam(net.parameters(), lr=1e-7, weight_decay=1e-2)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-6, weight_decay=1e-3)
     if torch.cuda.is_available():
         device = "cuda"
     else:
         device = "cpu"        
     lr_finder = LRFinder(model, optimizer, criterion, device=device)
-    lr_finder.range_test(train_loader, end_lr=100, num_iter=50)
+    lr_finder.range_test(train_loader, end_lr=10, num_iter=200)
     lr_finder.plot()#, log_lr=False)

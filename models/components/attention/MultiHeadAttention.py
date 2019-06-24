@@ -20,6 +20,11 @@ class MultiHeadAttention(nn.Module):
         self.out = nn.Linear(d_model, d_model)
     
     def forward(self, q, k, v, mask=None):        
+    """
+        Input: q, k, v are [batch_size, seq_len, d_model] 
+        Output: 
+    """
+        
         bs = q.size(0)
         
         # perform linear operation and split into h heads        
@@ -54,3 +59,65 @@ class MultiHeadAttention(nn.Module):
             
         output = torch.matmul(scores, v)
         return output    
+        
+if __name__ == "__main__":
+    import numpy as np
+    
+    
+    # debug stuff:    
+    q = torch.tensor([ [ [2.,2.,2.] ] ])
+    K = torch.tensor([ [ [1.,1.,1.] , [5.,5.,5.] ] ])
+    #result would be ([ [ [2.,2.,2.] , [2.5,2.5,2.5] ] ])
+    
+    print(K.size())
+    print(q)
+    print(q.size())
+    #qt = q.expand(1,3,3)#q.transpose(1,2)
+    qt = q.transpose(1,2)
+    print(qt)
+    print(qt.size())    
+    
+    print()
+    r = torch.bmm(K,qt)
+    print(r)
+    print(r.size())
+    print()
+    #print(e1.size())
+    #print(v1.size())
+    #qq = e1*v1
+    #print(qq)
+    
+    
+    
+    # prep inputs
+    batch_size = 2
+    seq_len = 10
+    enc_size = 4
+    dec_layers = 5
+    dec_size = 3
+    
+    encoder_outputs = torch.tensor(np.random.rand(batch_size, seq_len, enc_size), dtype=torch.float)
+    decoder_hidden_state = torch.tensor(np.random.rand(dec_layers*1, batch_size, dec_size), dtype=torch.float) # 1 for unidirectional
+    
+    # prep layer
+    device = torch.device("cpu")
+    #type = "additive"    
+    type = "general"    
+    att = Attention(enc_size, dec_size, device, type)
+    
+    # run
+    context, attention_weights = att(encoder_outputs, decoder_hidden_state)
+    print("Output is:")
+    print(context)
+    print("Attention weights size:" + str(attention_weights.size()))
+    
+    # debug stuff:    
+    #e1 = torch.tensor([[[2],[0.5]]])
+    #v1 = torch.tensor([ [ [1.,1.,1.] , [5.,5.,5.] ] ])
+    #result would be ([ [ [2.,2.,2.] , [2.5,2.5,2.5] ] ])
+    #print(e1.size())
+    #print(v1.size())
+    #qq = e1*v1
+    #print(qq)
+
+            
