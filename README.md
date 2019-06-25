@@ -13,7 +13,7 @@ For LSTM Encoder-Decoder:
 - [X] Add validation measures (BLEU, CIDEr, etc)
 - [X] Add logging stuff + visual 
 - [X] Add TeacherForcing & decay, validate it
-- [ ] Add label smoothing
+- [X] Add label smoothing: done, in components/criteria/SmoothedCrossEntropyLoss.py, implements KLLoss for smoothing<1
 - [X] Validate global additive attention is working (plot heatmap for ro-en task)
 - [ ] Implement attention with several types (class name: Attention) - in progress
 - [X] Encoder with self attention (multihead) 
