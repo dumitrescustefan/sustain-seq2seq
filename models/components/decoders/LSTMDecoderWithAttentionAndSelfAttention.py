@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '../../..')
 
 import torch
+import torch.nn as nn
 
 import numpy as np
 
@@ -9,25 +10,24 @@ from models.components.attention.Attention import Attention
 from models.components.decoders.LSTMDecoder import LSTMDecoder
 from models.components.attention.MultiHeadAttention import MultiHeadAttention
 
-class LSTMDecoderWithAttentionAndSelfAttention(LSTMDecoder):
+class LSTMDecoderWithAttentionAndSelfAttention(nn.Module):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, attention_type, device):
-        """
-        Creates a Decoder with attention.
-
-        Args :
-            dropout (float): The dropout in the attention layer.
-
-            see LSTMDecoder for further args info
-        """
-
-        super(LSTMDecoderWithAttentionAndSelfAttention, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
+        super(LSTMDecoderWithAttentionAndSelfAttention, self).__init__()
+        #super(LSTMDecoderWithAttentionAndSelfAttention, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
         
+        self.embedding = nn.Embedding(n_class, emb_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.lstm = nn.LSTM(emb_dim + input_size + emb_dim, hidden_dim, num_layers, dropout=lstm_dropout, batch_first=True)
+        self.output_linear = nn.Linear(hidden_dim, n_class)
+        self.device = device
+        
+        self.emb_dim = emb_dim
         self.n_class = n_class
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, device=device, type=attention_type)
 
         num_heads = 8 # TODO parametrize this
         assert hidden_dim % num_heads == 0, "LSTMDecoderWithAttentionAndSelfAttention hidden_dim ({}) should be a multiple of num_heads ({}).".format(hidden_dim, num_heads)        
-        self.self_attention = MultiHeadAttention(d_model=hidden_dim, num_heads=num_heads, dropout=dropout)
+        self.self_attention = MultiHeadAttention(d_model=emb_dim, num_heads=num_heads, dropout=dropout)
         
         self.to(device)
 
@@ -37,10 +37,14 @@ class LSTMDecoderWithAttentionAndSelfAttention(LSTMDecoder):
         """
         batch_size = input.shape[0]
         seq_len_dec = input.shape[1]        
+        previous_decoder_embedding_outputs = torch.zeros(batch_size, seq_len_dec, self.emb_dim).to(self.device)        
+        previous_decoder_embedding_outputs.requires_grad=False
+        previous_decoder_embedding_outputs[:,0] = self.embedding(input[:, 0])
+        #self_attention_mask = torch.zeros(, dtype=torch.uint8)
         attention_weights = []
         
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
-        output = torch.zeros(batch_size,seq_len_dec-1,self.n_class).to(self.device)
+        output = torch.zeros(batch_size, seq_len_dec-1, self.n_class).to(self.device)
         output.requires_grad=False
         
         # Loop over the rest of tokens in the input seq_len_dec.
@@ -67,9 +71,10 @@ class LSTMDecoderWithAttentionAndSelfAttention(LSTMDecoder):
                 # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
                 lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
 
-self_attn = self.self_attention(q=output, k=output, v=output, mask=None)
-        
-
+            self_attn = self.self_attention(q=previous_decoder_embedding_outputs[:,i:i+1,:], k=previous_decoder_embedding_outputs[:,0:i+1,:], v=previous_decoder_embedding_outputs[:,0:i+1,:], mask=None)
+            # self_attn is [batch_size, 1, emb_dim]
+            lstm_input = torch.cat((self_attn, lstm_input), dim=2)
+            
             # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
             # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
             dec_output, dec_states = self.lstm(lstm_input, dec_states)

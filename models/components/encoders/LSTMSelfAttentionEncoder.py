@@ -28,7 +28,7 @@ class LSTMSelfAttentionEncoder(nn.Module):
         
         num_heads = 8 # TODO parametrize this
         assert hidden_dim % num_heads == 0, "LSTMSelfAttentionEncoder hidden_dim ({}) should be a multiple of num_heads ({}).".format(hidden_dim, num_heads)        
-        #self.self_attention = MultiHeadAttention(d_model=int(hidden_dim/1), num_heads=num_heads, dropout=dropout)
+        
         self.self_attention = MultiHeadAttention(d_model=emb_dim, num_heads=num_heads, dropout=dropout)
         
         self.to(device)
