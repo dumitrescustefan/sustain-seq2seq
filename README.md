@@ -16,9 +16,10 @@ For LSTM Encoder-Decoder:
 - [ ] Add label smoothing
 - [X] Validate global additive attention is working (plot heatmap for ro-en task)
 - [ ] Implement attention with several types (class name: Attention) - in progress
-- [ ] Encoder with self attention (multihead) (class name: ---)
-- [ ] Decoder with self attention (multihead) (class name: ---)
-- [ ] L2 weight regularization
+- [X] Encoder with self attention (multihead) 
+- [X] Decoder with self attention (multihead) 
+- [X] Decoder with self attention and multihead to the encoder
+- [X] L2 weight regularization: tried it, not really worth it (in utils/trainer.py)
 - [ ] Add coverage (see NMT coverage), validate it
 - [ ] Implement beam search with length penalty 
 - [ ] Nice and clean run script, that takes strings as input and outputs strings back (i.e full process)
