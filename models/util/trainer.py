@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, '../..')
+
 import os, subprocess, gc
 import torch
 import torch.nn as nn
@@ -117,9 +120,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
     print("Working in folder [{}]".format(model_store_path))
     
-    criterion = nn.CrossEntropyLoss(ignore_index=0)
-    #optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    #criterion = nn.CrossEntropyLoss(ignore_index=0)
+    from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
+    criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)
+    
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
