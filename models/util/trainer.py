@@ -64,6 +64,8 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     for i in range(seq_len):        
         print("X   :", end='')
         for j in range(len(X_sample[i])):
+            print(str(X_sample[i][j].item()) + " ", end='')
+        """for j in range(len(X_sample[i])):
             token = str(X_sample[i][j].item())
 
             if token not in src_i2w.keys():
@@ -73,6 +75,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
                 break
             else:
                 print(src_i2w[token] + " ", end='')
+        """
         print("\nY   :", end='')
         for j in range(len(y_sample[i])):
             token = str(y_sample[i][j].item())
@@ -288,7 +291,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
-            score, eval = evaluate(y_gold, y_predicted, tgt_i2w, use_accuracy=False, use_bleu=False)            
+            #score, eval = evaluate(y_gold[:200], y_predicted[:200], tgt_i2w, use_accuracy=False, use_bleu=False)            
+            score = 0
+            eval = {}
+            eval["meteor"], eval["rouge_l_f"] = 0, 0
             log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
             #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
             

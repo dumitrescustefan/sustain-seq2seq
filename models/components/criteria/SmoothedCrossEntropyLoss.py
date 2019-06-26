@@ -22,29 +22,11 @@ class SmoothedCrossEntropyLoss(nn.Module):
         self.label_smoothing = label_smoothing
 
         if label_smoothing < 1.:
-            self.criterion = nn.KLDivLoss(reduction='batchmean') #size_average=False)
-            """
-            pytorch v1.1.0: reduction = 'mean' doesn’t return the true kl divergence value, please use reduction = 'batchmean' which aligns with KL math definition. In the next major release, 'mean' will be changed to be the same as 'batchmean'.
-            """
+            self.criterion = nn.KLDivLoss(reduction='batchmean') #size_average=False)            
         else:
-            self.criterion = nn.CrossEntropyLoss(ignore_index=ignore_index) #nn.NLLLoss(size_average=False, ignore_index=self.padding_idx)
+            self.criterion = nn.CrossEntropyLoss(ignore_index=ignore_index)
         
-    def _smooth_label(self, num_tokens):
-
-        # When label smoothing is turned on,
-        # KL-divergence between q_{smoothed ground truth prob.}(w)
-        # and p_{prob. computed by model}(w) is minimized.
-        # If label smoothing value is set to zero, the loss
-        # is equivalent to NLLLoss or CrossEntropyLoss.
-        # All non-true labels are uniformly set to low-confidence.
-
-        one_hot = torch.randn(1, num_tokens)
-        one_hot.fill_(self.label_smoothing / (num_tokens - 2))
-        one_hot[0][self.padding_idx] = 0
-
-        return one_hot
-
-    def _compute_loss(self, generator, dec_outs, labels):
+    def not_used_compute_loss(self, generator, dec_outs, labels):
 
         scores = generator(self._bottle(dec_outs)) # [batch_size * seq_len, d_words]
 

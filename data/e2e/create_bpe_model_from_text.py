@@ -6,12 +6,12 @@ will create a BPE model placed in the output_model_folder_path, with a json w2i 
 
 # add package root
 import os, sys, json, string
-sys.path.insert(0, '..')
+sys.path.insert(0, '../..')
 
 import sentencepiece as spm
 
-from common.dataset import Slot, Slots
-from e2e_lstm_att.e2e_raw_to_slots import e2e_read
+from data.e2e.data import Slot, Slots
+from data.e2e.raw_to_slots import e2e_read
 
 # read files
 def e2e_create_bpe_model(output_model_folder_path, vocab_size):
@@ -65,5 +65,5 @@ def e2e_create_bpe_model(output_model_folder_path, vocab_size):
     print("Done.")
     
 if __name__=="__main__":
-    e2e_create_bpe_model(output_model_folder_path="../data/e2e", vocab_size = 512)
+    e2e_create_bpe_model(output_model_folder_path="bpe", vocab_size = 1024)
     
