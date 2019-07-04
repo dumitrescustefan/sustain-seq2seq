@@ -44,7 +44,7 @@ class Attention(nn.Module):
             self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
             self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
             self.V = nn.Linear(self.encoder_size, 1, bias=False) 
-        elif type == "coverage":
+        elif type == "coverage": # https://arxiv.org/pdf/1601.04811.pdf
             # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
             self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
             self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
