@@ -12,7 +12,7 @@ if __name__ == "__main__":
     print("Loading data ...")
     batch_size = 256
     min_seq_len_X = 10
-    max_seq_len_X = 30
+    max_seq_len_X = 50
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
                 dec_dropout=0.33,
                 dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "additive",
+                dec_attention_type = "coverage",
                 dec_transfer_hidden=True)
     
     print("_"*80+"\n")
@@ -74,10 +74,10 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_elfattn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm_selfattn"), 
           resume = False, 
-          max_epochs = 550, 
-          patience = 550, 
+          max_epochs = 500, 
+          patience = 25, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
           tf_start_ratio=0.9,

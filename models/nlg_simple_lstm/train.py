@@ -53,7 +53,7 @@ if __name__ == "__main__":
                 dec_dropout=0.33,
                 dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "additive")
+                dec_attention_type = "coverage")
     
     print("_"*80+"\n")
     print(model)
@@ -82,7 +82,7 @@ if __name__ == "__main__":
           model_store_path = os.path.join("..", "..", "train", "nlg_simple_lstm"), 
           resume = False, 
           max_epochs = 300, 
-          patience = 300, 
+          patience = 25, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
           tf_start_ratio=0.9,

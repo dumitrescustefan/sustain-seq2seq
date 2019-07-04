@@ -58,7 +58,7 @@ if __name__ == "__main__":
                 dec_dropout=0.33,
                 dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "additive",
+                dec_attention_type = "coverage",
                 dec_transfer_hidden=True)
     
     print("_"*80+"\n")
@@ -85,9 +85,9 @@ if __name__ == "__main__":
           valid_loader,
           test_loader,                          
           model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
-          resume = False, 
-          max_epochs = 550, 
-          patience = 550, 
+          resume = True, 
+          max_epochs = 400, 
+          patience = 25, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
           tf_start_ratio=0.9,

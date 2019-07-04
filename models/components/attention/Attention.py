@@ -43,7 +43,18 @@ class Attention(nn.Module):
             # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
             self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
             self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
-            self.V = nn.Linear(self.encoder_size, 1, bias=False)        
+            self.V = nn.Linear(self.encoder_size, 1, bias=False) 
+        elif type == "coverage":
+            # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
+            self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
+            self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
+            self.V = nn.Linear(self.encoder_size, 1, bias=False)  
+            
+            self.coverage_dim = 10
+            self.coverage_input_size = self.coverage_dim + 1 + self.encoder_size + self.encoder_size
+            self.cov_gru = nn.GRU(self.coverage_input_size, self.coverage_dim, batch_first=True)
+            self.W3 = nn.Linear(self.coverage_dim, self.encoder_size)
+            
         elif (type == "multiplicative" or type == "dot"):
             # f(q, K) = q^t K , Luong et al., 2015
             # direct dot product, nothing to declare here
@@ -71,7 +82,8 @@ class Attention(nn.Module):
             pass
         else:
             raise Exception("Attention type not properly defined! (got type={})".format(self.type))
-        self.to(device)
+        self.device = device
+        self.to(self.device)
 
     def _reshape_state_h(self, state_h):    
         """
@@ -95,19 +107,41 @@ class Attention(nn.Module):
         # [1, batch_size, decoder_hidden_size] -> [batch_size, 1, decoder_hidden_size]
         return state_h.permute(1, 0, 2)
 
+    def reset_coverage(self, batch_size, enc_seq_len):
+        if self.type != "coverage":
+            return
+        self.C = torch.zeros(batch_size, enc_seq_len, self.coverage_dim, device=self.device)
+        self.gru_input = torch.zeros(batch_size, 1, self.coverage_input_size, device=self.device)
+    
+    def _coverage_compute_next_C(self, attention_weights, enc_output, state_h):
+        # attention_weights:        [batch_size, seq_len, 1]
+        # enc_output :              [batch_size, seq_len, encoder_size]
+        # state_h (after reshape):  [batch_size, 1, encoder_size]       
+        # self.C at prev timestep:  [batch_size, seq_len, coverage_dim]
+        seq_len = enc_output.size[1]
+        for i in range(seq_len):
+            self.gru_input[:,:,0:self.coverage_dim] = self.C[:,i:i+1,:] # cat self.C at prev timestep for position i of source word
+            self.gru_input[:,:,self.coverage_dim:self.coverage_dim+1] = attention_weights[:,i:i+1,:] # cat attention weight
+            self.gru_input[:,:,self.coverage_dim+1:self.coverage_dim+1+self.encoder_size] = enc_output[:,i:i+1,:] # cat encoder output
+            self.gru_input[:,:,self.coverage_dim+1+self.encoder_size:] = state_h[:,0:1,:] # cat state_h
+            self.C[:,i:i+1,:] = self.cov_gru(self.gru_input)
+        
     def _energy (self, K, Q):
         """ 
             Calculates the compatibility function f(query, keys)
             
             Args:
                 K (tensor): Keys tensor of size [batch_size, seq_len, encoder_size]
-                Q (tensor): Query tensor of size [batch_size, 1, decoder_size]
+                Q (tensor): Query tensor of size [batch_size, 1, decoder_size], but now dec_size is enc_size due to Q annotation
                 
             Returns: 
                 energy tensor of size [batch_size, seq_len, 1]
         """
         if self.type == "additive":                        
             return self.V(torch.tanh(self.W1(K) + self.W2(Q)))
+        
+        if self.type == "coverage":
+            return self.V(torch.tanh(self.W1(K) + self.W2(Q) + self.W3(self.C)))
         
         if self.type == "multiplicative" or self.type == "dot":    
             # q^t K means batch matrix multiplying K with q transposed:
@@ -154,6 +188,10 @@ class Attention(nn.Module):
         
         # transform energy into probability distribution using softmax        
         attention_weights = torch.softmax(energy, dim=1) # [batch_size, seq_len, 1]
+        
+        # for coverage only, calculate the next C
+        if type=="coverage":
+            self._coverage_compute_next_C(attention_weights, enc_output, state_h)            
         
         # calculate weighted values z (element wise multiplication of energy * values)        
         # attention_weights is [batch_size, seq_len, 1], V is [batch_size, seq_len, encoder_size], z is same as V

@@ -56,7 +56,9 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     if model.cuda:
         X_sample = X_sample.cuda()
         y_sample = y_sample.cuda()
-
+    if hasattr(model.decoder.attention, 'reset_coverage'):
+        model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
+                     
     y_pred_dev_sample, attention_weights = model.forward(X_sample, y_sample)
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
     
@@ -172,7 +174,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             if model.cuda:
                 x_batch = x_batch.cuda()
                 y_batch = y_batch.cuda()
-
+            
+            if hasattr(model.decoder.attention, 'reset_coverage'):
+                model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+            
             optimizer.zero_grad()
             
             # x_batch and y_batch shapes: [bs, padded_sequence]
@@ -270,7 +275,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                     if model.cuda:
                         x_batch = x_batch.cuda()
                         y_batch = y_batch.cuda()
-
+                    
+                    if hasattr(model.decoder.attention, 'reset_coverage'):
+                        model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+                        
                     output, batch_attention_weights = model.forward(x_batch, y_batch)
                     loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
                     
@@ -291,16 +299,17 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
-            #score, eval = evaluate(y_gold[:200], y_predicted[:200], tgt_i2w, use_accuracy=False, use_bleu=False)            
-            score = 0
-            eval = {}
-            eval["meteor"], eval["rouge_l_f"] = 0, 0
-            log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
-            #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
-            
-            text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score)
-            print(text)
-            log_object.text(text)
+            if current_epoch%5==0:
+                score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
+                #score = 0
+                #eval = {}
+                #eval["meteor"], eval["rouge_l_f"] = 0, 0
+                log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
+                #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
+                
+                text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score)
+                print(text)
+                log_object.text(text)
            
             if score > best_accuracy:
                 text = "\tBest score = {:.4f}".format(score)
