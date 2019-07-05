@@ -180,7 +180,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             
             optimizer.zero_grad()
             
-            # x_batch and y_batch shapes: [bs, padded_sequence]
+            # x_batch and y_batch shapes: [bs, padded_sequence]            
             output, _ = model.forward(x_batch, y_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             

@@ -134,7 +134,26 @@ class Log():
             return True            
         except:
             return False
+    
+
+    def plot_heatmaps(self, xs, tensor_name = "", epoch=0):        
+        #fig = plt.figure(figsize=(18, 16))             
+        data = xs[0,:,:]
+        ncols = data.size()[0]
+        data = data.detach().cpu().numpy()
         
+        fig, axs = plt.subplots(figsize=(22, 20), ncols=ncols)
+        fig.subplots_adjust(wspace=0.02)
+        for i in range(ncols):
+            #ax = axs[i].subplot(ncols,i,1)            
+            sns.heatmap(np.transpose(data[i:i+1,:]), cmap="rocket", ax=axs[i], cbar=False, xticklabels=False, yticklabels=False, annot=False)
+            
+            #fig.colorbar(ax.collections[0], ax=ax,location="left", use_gridspec=False, pad=0.2)            
+        plt.title('Tensor '+tensor_name+' at epoch '+str(epoch))
+        fig.savefig(os.path.join(self.folder, "tensor_"+tensor_name+"_"+str(epoch).zfill(4)), bbox_inches='tight')
+        plt.clf()
+        plt.close()
+    
     def plot_heatmap(self, x, input_labels=True, output_labels=True, epoch=0): 
         """
             x is a numpy 2d matrix        

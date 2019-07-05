@@ -2,7 +2,7 @@
 import os, sys
 sys.path.insert(0, '../..')
 
-from models.lstm_attn.model import LSTMEncoderDecoderWithAttention
+from models.lstm_attn_sp.model import LSTMEncoderDecoderWithAttentionAndScratchPad
 from models.util.trainer import train, get_freer_gpu
 import torch
 
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 256
+    batch_size = 1#256
     min_seq_len_X = 10
     max_seq_len_X = 30
     min_seq_len_y = min_seq_len_X
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     
     # MODEL TRAINING #######################################################
         
-    model = LSTMEncoderDecoderWithAttention(
+    model = LSTMEncoderDecoderWithAttentionAndScratchPad(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=256,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
@@ -85,7 +85,7 @@ if __name__ == "__main__":
           valid_loader,
           test_loader,                          
           model_store_path = os.path.join("..", "..", "train", "lstm_attn_sp"), 
-          resume = True, 
+          resume = False, 
           max_epochs = 400, 
           patience = 25, 
           optimizer = optimizer,

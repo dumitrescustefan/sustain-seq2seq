@@ -27,6 +27,7 @@ class LSTMDecoderWithAttentionAndScratchPad(LSTMDecoder):
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, device=device, type=attention_type)
         self.scratchpad = ScratchPad(enc_size=input_size, dec_size=hidden_dim, device=device)
         self.to(device)
+        torch.autograd.set_detect_anomaly(True)
 
     def forward(self, input, enc_output, dec_states, teacher_forcing_ratio):
         """
@@ -35,7 +36,7 @@ class LSTMDecoderWithAttentionAndScratchPad(LSTMDecoder):
         batch_size = input.shape[0]
         seq_len_dec = input.shape[1]        
         attention_weights = []
-        
+       
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
         output = torch.zeros(batch_size,seq_len_dec-1,self.n_class).to(self.device)
         output.requires_grad=False
@@ -44,7 +45,7 @@ class LSTMDecoderWithAttentionAndScratchPad(LSTMDecoder):
         for i in range(0, seq_len_dec-1):
             # Calculate the context vector at step i.
             # context_vector is [batch_size, encoder_size], attention_weights is [batch_size, seq_len, 1]
-            context_vector, step_attention_weights = self.attention(state_h=dec_states[0], enc_output=enc_output)
+            context_vector, step_attention_weights = self.attention(state_h=dec_states[0], enc_output=enc_output.detach()) XXXX
             
             # save attention weights incrementally
             attention_weights.append(step_attention_weights.squeeze(2).cpu().tolist())
@@ -77,7 +78,7 @@ class LSTMDecoderWithAttentionAndScratchPad(LSTMDecoder):
             output[:,i,:] = lin_output.squeeze(1)
                 
             # ScratchPad, update encoder states
-            enc_output = self.scratchpad(enc_output, dec_states, context_vector)
+            enc_output = self.scratchpad(enc_output.detach(), dec_states, context_vector, i) XXX
             
             
         # output is a tensor [batch_size, seq_len_dec, n_class]

@@ -19,7 +19,13 @@ class ScratchPad(nn.Module):
         
         # to compute u we need need the updated (i+1) state of the decoder, the current context (i)
         self.mlp_u = nn.Linear(dec_size+enc_size, enc_size)
-
+        
+        from models.util.log import Log
+        log_path = os.path.join("tensors")
+        self.log_object = Log(log_path, clear=True)        
+        self.plot_every = 1000
+        self.forwards = 0
+        
         self.device = device
         self.to(device)
 
@@ -45,7 +51,7 @@ class ScratchPad(nn.Module):
         # [1, batch_size, decoder_hidden_size] -> [batch_size, 1, decoder_hidden_size]
         return state_h.permute(1, 0, 2)
 
-    def forward(self, encoder_output, decoder_state, context):
+    def forward(self, encoder_output, decoder_state, context, decoder_step = 0, plot = False):
         """
         Args:
             encoder_output: [batch_size, seq_len_enc, enc_size]
@@ -59,7 +65,7 @@ class ScratchPad(nn.Module):
         seq_len = encoder_output.size()[1]
         
         # reshape state_h
-        reshaped_decoder_state = self._reshape_state_h(decoder_state)
+        reshaped_decoder_state = self._reshape_state_h(decoder_state[0])
         
         # first calculate u as the tanh(mlp(state, context))
         input = torch.zeros(batch_size, self.dec_size+self.enc_size, device = self.device)
@@ -68,6 +74,11 @@ class ScratchPad(nn.Module):
         u = self.mlp_u(input).tanh()
         
         
+        if self.forwards%self.plot_every == 0:
+            plot = True
+        if plot:
+            self.log_object.plot_heatmaps(encoder_output, "encoder_output", epoch = self.forwards+decoder_step*2)
+            
         # for each encoder output step i, compute alpha as sigmoid(mlp(state, context, encoder_output))
         input = torch.zeros(batch_size, self.dec_size+self.enc_size+self.enc_size, device = self.device)
         for i in range(seq_len):            
@@ -79,4 +90,9 @@ class ScratchPad(nn.Module):
             # update encoder state i
             encoder_output[:,i:i+1,:] = alpha * encoder_output[:,i:i+1,:] + (1. - alpha) * u
         
+        
+        if plot:
+            self.log_object.plot_heatmaps(encoder_output, "encoder_output", epoch = self.forwards+decoder_step*2+1)
+        
+        self.forwards+=1
         return encoder_output
