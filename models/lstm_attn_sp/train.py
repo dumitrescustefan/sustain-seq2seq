@@ -2,31 +2,32 @@
 import os, sys
 sys.path.insert(0, '../..')
 
-from models.nlg_simple_lstm.model import NLG_SimpleEncoder_LSTMDecoderWithAttentionAndSelfAttention
+from models.lstm_attn.model import LSTMEncoderDecoderWithAttention
 from models.util.trainer import train, get_freer_gpu
-from data.e2e.data import Slot, Slots
-
 import torch
 
 if __name__ == "__main__":    
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 64
+    batch_size = 256
+    min_seq_len_X = 10
+    max_seq_len_X = 30
+    min_seq_len_y = min_seq_len_X
+    max_seq_len_y = max_seq_len_X
+
+    #from data.roen.loader import loader
+    #data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
+    #from data.fren.loader import loader
+    from models.util.loaders.standard import loader
+    data_folder = os.path.join("..", "..", "data", "fren", "ready")
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
     
-    from data.e2e.loader_vector import loader
-    data_folder = os.path.join("..", "..", "data", "e2e", "vector")
-    slots, train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size)
-    
-    slot_sizes = []
-    for slot in slots.slots:
-        slot_sizes.append(len(slot.values))
-    
-    print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size tgt {}\n".format(
+    print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
         len(valid_loader.dataset.X),
         len(test_loader.dataset.X),
-        len(tgt_i2w)))
+        len(src_i2w), len(tgt_i2w)))
 
     #train_loader.dataset.X = train_loader.dataset.X[0:800]
     #train_loader.dataset.y = train_loader.dataset.y[0:800]
@@ -41,19 +42,24 @@ if __name__ == "__main__":
         torch.cuda.set_device(freer_gpu)
     # ######################################################################
     
-    # MODEL TRAINING #######################################################                    
-    model = NLG_SimpleEncoder_LSTMDecoderWithAttentionAndSelfAttention(                
-                enc_emb_dim=32,
-                slot_sizes = slot_sizes,
-                enc_dropout=0.2,
-                dec_input_dim=32,  
+    # MODEL TRAINING #######################################################
+        
+    model = LSTMEncoderDecoderWithAttention(
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=256,
+                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=1,
+                enc_dropout=0.33,
+                enc_lstm_dropout=0.33,
+                dec_input_dim=256, 
                 dec_emb_dim=256,
                 dec_hidden_dim=256,
-                dec_num_layers=3,
+                dec_num_layers=1,
                 dec_dropout=0.33,
                 dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "coverage")
+                dec_attention_type = "coverage",
+                dec_transfer_hidden=True)
     
     print("_"*80+"\n")
     print(model)
@@ -69,8 +75,7 @@ if __name__ == "__main__":
     print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
-    #optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.5, momentum = 0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
     lr_scheduler = None
     
     train(model, 
@@ -79,9 +84,9 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "nlg_simple_lstm"), 
-          resume = False, 
-          max_epochs = 300, 
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn_sp"), 
+          resume = True, 
+          max_epochs = 400, 
           patience = 25, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,

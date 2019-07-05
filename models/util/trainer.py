@@ -299,6 +299,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
+            score = 0.
             if current_epoch%5==0:
                 score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
                 #score = 0
