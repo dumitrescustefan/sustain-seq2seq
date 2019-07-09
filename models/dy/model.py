@@ -42,10 +42,10 @@ class Encoder():
         
         
 class Decoder():
-    def __init__(self, model, dec_emb_dim, dec_input_size, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, attention_type):
+    def __init__(self, model, dec_emb_dim, enc_output_size, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, attention_type):
         self.model = model       
         self.dec_emb_dim = dec_emb_dim
-        self.dec_input_size = dec_input_size
+        self.enc_output_size = enc_output_size
         self.dec_hidden_dim = dec_hidden_dim
         self.dec_vocab_size = dec_vocab_size
         self.dec_lstm_dropout = dec_lstm_dropout
@@ -53,7 +53,14 @@ class Decoder():
         self.attention_type = attention_type
         # layers
         self.embedding = self.model.add_lookup_parameters((dec_vocab_size, dec_emb_dim))
+        self.rnn = dy.VanillaLSTMBuilder(dec_num_layers, dec_emb_dim+enc_output_size, dec_hidden_dim, model)
+        self.output_linear_W = self.model.add_parameters((enc_output_size, dec_hidden_dim))
+        self.output_linear_b = self.model.add_parameters(enc_output_size)
         
+        self.att_w1 = self.model.add_parameters((enc_output_size, enc_output_size))
+        self.att_w2 = self.model.add_parameters((enc_output_size, enc_output_size))
+        self.att_v = self.model.add_parameters((1, enc_output_size))
+
         # other initializations
         self._train()
     
@@ -65,17 +72,37 @@ class Decoder():
         self.rnn.disable_dropout()
         self.train = False  
     
-    def _attention(self, state_h, enc_output):
-    
-        return context_vector, step_attention_weights
-    
-    def forward(self, input, enc_output, dec_states, teacher_forcing_ratio): 
+    def _attention(self, dec_state, enc_output):
+        w1 = self.att_w1.expr(update=True)
+        w2 = self.att_w2.expr(update=True)
+        v = self.att_v.expr(update=True)
+        attention_weights = []
+
+        w2dt = w2 * dec_state #dy.concatenate([state_fw.s()[-1], state_bw.s()[-1]])
+        for input_vector in enc_output:
+            attention_weight = v * dy.tanh(w1 * input_vector + w2dt)
+            attention_weights.append(attention_weight)
+
+        attention_weights = dy.softmax(dy.concatenate(attention_weights))
+
+        context = dy.esum(
+            [vector * attention_weight for vector, attention_weight in zip(enc_output, attention_weights)])
+        
+        step_attention_weights = None
+        return context, step_attention_weights
+        
+    def forward(self, input, enc_output, teacher_forcing_ratio):         
         seq_len = len(input)
+        output = []
+        rnn = self.rnn.initial_state()
+         
+         attention = self._attend(rnn_outputs, rnn_states_fw[-1], rnn_states_bw[-1])
+
         # input is a list of ints, starting with 2 "[BOS]"
-        for i in range(0, seq_len-1):
-            # Calculate the context vector at step i.
-            # context_vector is [batch_size, encoder_size], attention_weights is [batch_size, seq_len, 1]
-            context_vector, step_attention_weights = self._attention(state_h=dec_states[0], enc_output=enc_output)
+        for i in range(0, seq_len-1): # we stop when we feed the decoder the [EOS] and we take its output (thus the -1)
+            # calculate the context vector at step i.
+            # context_vector is [encoder_size], attention_weights is [seq_len] # todo
+            context_vector, step_attention_weights = self._attention(dec_state=rnn.s(), enc_output=enc_output)
             
             # save attention weights incrementally
             attention_weights.append(step_attention_weights.squeeze(2).cpu().tolist())
@@ -96,16 +123,15 @@ class Decoder():
                 lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
 
             # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
-            # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
-            dec_output, dec_states = self.lstm(lstm_input, dec_states)
-
+            rnn=rnn.add_input(lstm_input)
+            dec_output = rnn.output()
+            
             # Maps the decoder output to the decoder vocab size space. 
-            # [batch_size, 1, hidden_dim] -> [batch_size, 1, n_class].
-            lin_output = self.output_linear(dec_output)            
+            lin_output = self.output_linear_W * dec_output + self.output_linear_b       
 
             # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
             #output = torch.cat((output, lin_output), dim=1)            
-            output[:,i,:] = lin_output.squeeze(1)
+            output.append(lin_output)
             
         # output is a tensor [batch_size, seq_len_dec, n_class]
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
@@ -137,20 +163,12 @@ class EncoderDecoder():
     def _transfer_hidden_from_encoder_to_decoder(self, enc_states):
         pass
         
-    def forward(self, x, y, teacher_forcing_ratio=0.):    
-        enc_output, enc_states = self.encoder.forward(x)
+    def forward(self, x, y, teacher_forcing_ratio=0.):
+        # x and y is a list of ints with BOS and EOS added
         
-         # Calculates the output of the decoder.
-        output, attention_weights = self.decoder.forward(y, enc_output, dec_states, teacher_forcing_ratio)
-
-        # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
-        bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size).to(self.device)
-        # Marks the corresponding BOS position with a probability of 1.
-        bos_tensor[:, :, 2] = 1
-
-        # Concatenates the BOS tensor with the output. [batch_size, dec_seq_len-1, dec_vocab_size] -> [batch_size,
-        # dec_seq_len, dec_vocab_size]
-        output = torch.cat((bos_tensor, output), dim=1)
+        enc_output = self.encoder.forward(x)
+        
+        output, attention_weights = self.decoder.forward(y, enc_output, teacher_forcing_ratio)
 
         return output, attention_weights
 
