@@ -65,7 +65,7 @@ class Decoder():
         self._train()
     
     def _train (self):
-        self.rnn.set_dropout(self.enc_lstm_dropout)
+        self.rnn.set_dropout(self.dec_lstm_dropout)
         self.train = True
     
     def _eval (self):
@@ -77,7 +77,9 @@ class Decoder():
         w2 = self.att_w2.expr(update=True)
         v = self.att_v.expr(update=True)
         attention_weights = []
-
+        print("att")
+        print(w2)
+        print(dec_state)
         w2dt = w2 * dec_state #dy.concatenate([state_fw.s()[-1], state_bw.s()[-1]])
         for input_vector in enc_output:
             attention_weight = v * dy.tanh(w1 * input_vector + w2dt)
@@ -94,36 +96,33 @@ class Decoder():
     def forward(self, input, enc_output, teacher_forcing_ratio):         
         seq_len = len(input)
         output = []
-        rnn = self.rnn.initial_state()
-         
-         attention = self._attend(rnn_outputs, rnn_states_fw[-1], rnn_states_bw[-1])
-
+        attention_weights = []
+        rnn = self.rnn.initial_state([dy.inputVector(np.zeros(self.dec_hidden_dim)) for i in range(4)])
+        #print([x.value() for x in rnn.s()])
+        #print([x.value() for x in self.rnn.s()])
+        print("Start forward loop:")
+        #context, _ = self._attention(rnn.s(), enc_output)
+        context = enc_output[-1]
         # input is a list of ints, starting with 2 "[BOS]"
         for i in range(0, seq_len-1): # we stop when we feed the decoder the [EOS] and we take its output (thus the -1)
             # calculate the context vector at step i.
-            # context_vector is [encoder_size], attention_weights is [seq_len] # todo
-            context_vector, step_attention_weights = self._attention(dec_state=rnn.s(), enc_output=enc_output)
-            
+            # context is [encoder_size], attention_weights is [seq_len] # todo
+            #context, step_attention_weights = self._attention(rnn.s(), enc_output)
+            context = enc_output[-1]
+            step_attention_weights = []
             # save attention weights incrementally
-            attention_weights.append(step_attention_weights.squeeze(2).cpu().tolist())
+            attention_weights.append(step_attention_weights)
             
             if np.random.uniform(0, 1) < teacher_forcing_ratio or i is 0:
-                # Concatenates the i-th embedding of the input with the corresponding  context vector over the second
-                # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
-                # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].                        
-                lstm_input = torch.cat((self.dropout(self.embedding(input[:, i])), context_vector), dim=1).reshape(batch_size, 1, -1)
+                word_embedding = dy.dropout(self.embedding[input[i]], self.dec_dropout)                                
             else:
-                # Calculates the embeddings of the previous output. Counts the argmax over the last third dimension and
-                # then squeezes the second dimension, the sequence length. [batch_size, emb_dim].
-                prev_output_embeddings = self.dropout(self.embedding(torch.squeeze(torch.argmax(lin_output, dim=2), dim=1)))
+                prev_predicted_word_index = np.argmax(lin_output.value())                
+                word_embedding = dy.dropout(self.embedding[prev_predicted_word_index], self.dec_dropout) 
                 
-                # Concatenates the (i-1)-th embedding of the previous output with the corresponding  context vector over the second
-                # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
-                # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
-                lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
-
-            # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
-            rnn=rnn.add_input(lstm_input)
+            lstm_input = dy.concatenate([word_embedding, context])
+            
+            rnn=rnn.add_input(lstm_input) #cine e S si cum accesez state-ul curent, depinde de nr de layere?
+            print([x.value() for x in rnn.s()])
             dec_output = rnn.output()
             
             # Maps the decoder output to the decoder vocab size space. 
@@ -132,6 +131,7 @@ class Decoder():
             # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
             #output = torch.cat((output, lin_output), dim=1)            
             output.append(lin_output)
+            print("Step {} predicted index = {}".format(i,np.argmax(lin_output.value())))
             
         # output is a tensor [batch_size, seq_len_dec, n_class]
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
@@ -175,6 +175,18 @@ class EncoderDecoder():
     
         
 if __name__ == "__main__":
+    model=dy.Model()
+    dy.renew_cg()
+    
+    print("Encoder:")
     input = [2,4,5,6,3]
-    enc = Encoder(model=dy.Model(), enc_vocab_size=10, enc_emb_dim=8, enc_hidden_dim=6, enc_num_layers=3, enc_lstm_dropout=0.4, enc_dropout=0.3)
-    print(out)
+    enc = Encoder(model, enc_vocab_size=10, enc_emb_dim=8, enc_hidden_dim=6, enc_num_layers=3, enc_lstm_dropout=0.4, enc_dropout=0.3)
+    enc_output = enc.forward(input)
+    print("Encoder output:")
+    print(enc_output)
+    
+    print("Decoder:")
+    dec = Decoder(model, dec_emb_dim=4, enc_output_size=6, dec_hidden_dim=3, dec_num_layers=2, dec_vocab_size=10, dec_lstm_dropout=0.2, dec_dropout=0.2, attention_type="additive")
+    dec_output = dec.forward(input, enc_output, 0.)
+    print("Decoder output:")
+    print(dec_output)
