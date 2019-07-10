@@ -32,6 +32,7 @@ class BiDataset():
         X = torch.load(os.path.join(root_dir,type+"_X.pt"))
         y = torch.load(os.path.join(root_dir,type+"_y.pt"))
         
+        self.i = 0
         self.X = []
         self.y = []
         cut_over_X = 0
@@ -73,4 +74,10 @@ class BiDataset():
         self.tgt_w2i = json.load(open(os.path.join(root_dir,"en_word2index.json")))
         self.tgt_i2w = json.load(open(os.path.join(root_dir,"en_index2word.json")))
 
-   
+    def __next__(self):
+        if self.i < len(self.X):
+            self.i+=1
+            return self.X[self.i], self.y[self.i]
+        raise StopIteration()
+    def __iter__(self):
+        return self
