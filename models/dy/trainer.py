@@ -85,24 +85,24 @@ def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, lo
     log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
 def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
-    X_sample, y_sample = iter(loader).next()
-    seq_len = min(seq_len,len(X_sample))
-    X_sample = X_sample[0:seq_len]
-    y_sample = y_sample[0:seq_len]
-    if model.cuda:
-        X_sample = X_sample.cuda()
-        y_sample = y_sample.cuda()
-    if hasattr(model.decoder.attention, 'reset_coverage'):
-        model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
-                     
-    y_pred_dev_sample, attention_weights = model.forward(X_sample, y_sample)
-    y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
+    Xs = loader.X[:seq_len]
+    ys = loader.y[:seq_len]
+    
+    #if hasattr(model.decoder.attention, 'reset_coverage'):
+    #    model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
+    outputs = []
+    for i in range(len(Xs)):
+        logits, _ = model.forward(Xs[i], ys[i])
+        seq = []        
+        for logit in logits:
+            seq.append(np.argmax(logit.value()))
+        outputs.append(seq)
     
     # print examples
     for i in range(seq_len):        
         print("X   :", end='')
-        for j in range(len(X_sample[i])):
-            print(str(X_sample[i][j].item()) + " ", end='')
+        for j in range(len(Xs[i])):
+            print(str(Xs[i][j]) + " ", end='')
         """for j in range(len(X_sample[i])):
             token = str(X_sample[i][j].item())
 
@@ -115,25 +115,24 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
                 print(src_i2w[token] + " ", end='')
         """
         print("\nY   :", end='')
-        for j in range(len(y_sample[i])):
-            token = str(y_sample[i][j].item())
+        for j in range(len(ys[i])):
+            token = str(ys[i][j])
 
             if token not in tgt_i2w.keys():
                 print(tgt_i2w['1'] + " ", end='')
             elif token == '3':
                 print(tgt_i2w['3'], end='')
-                break
+                
             else:
                 print(tgt_i2w[token] + " ", end='')
         print("\nPRED:", end='')
-        for j in range(len(y_pred_dev_sample[i])):
-            token = str(y_pred_dev_sample[i][j].item())
-
+        for j in range(len(outputs[i])):
+            token = str(outputs[i][j])
             if token not in tgt_i2w.keys():
                 print(tgt_i2w['1'] + " ", end='')
             elif token == '3':
                 print(tgt_i2w['3'], end='')
-                break
+                
             else:
                 print(tgt_i2w[token] + " ", end='')
         print()
@@ -195,6 +194,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         # train
         model.train()
+        train_loader.reset()
         total_loss, log_average_loss = 0, 0  
         batch_current_counter = 0
         completed_batches = 0
@@ -217,19 +217,18 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 batch_current_counter = 0 
                 completed_batches += 1
                 batch_loss = dy.esum(batch_losses) / batch_size                
-                total_loss += batch_loss.value()
+                total_loss += batch_loss.value() 
                 batch_loss.backward()
                 optimizer.update()
-                batch_losses = []
-                dy.renew_cg()
-                log_average_loss = total_loss / completed_batches
+                batch_losses = []                
+                log_average_loss = total_loss / completed_batches 
                 t.update(batch_size)
-                t.set_postfix(loss=log_average_loss, x_y_len=str(len(X))+"/"+str(len(y)) )#, lr = current_scheduler_lr)#, cur_loss = loss.value())
-            
+                t.set_postfix(loss=log_average_loss, x_y_len=str(len(X))+"/"+str(len(y)), cur_loss = batch_loss.value() )#, lr = current_scheduler_lr)#, cur_loss = loss.value())
+                dy.renew_cg()
         
         t.close()                  
         del t
-        gc.collect()
+        #gc.collect()
         
         
         log_object.text("\ttraining_loss={}".format(log_average_loss))
@@ -238,10 +237,11 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
 
         # dev        
         if valid_loader is not None:
+            valid_loader.reset()
             model.eval()
             
             total_loss = 0
-            _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
+            _print_examples(model, valid_loader, 10, src_i2w, tgt_i2w)
 
             t = tqdm(total=len(valid_loader.X), ncols=120, mininterval=0.5, smoothing = 1., desc="Epoch " + str(current_epoch)+" [valid]", unit="inst")
             y_gold = list()
@@ -252,18 +252,20 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 #    model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
                     
                 logits, attention_weights = model.forward(X, y)
+                seq = []
                 losses = []
-                #y_predicted
                 for logit, true_y in zip(logits, y):
+                    seq.append(np.argmax(logit))
                     losses.append(dy.pickneglogsoftmax(logit, true_y))
+                y_predicted.append(seq)
                 loss = dy.esum(losses)
                 
-                y_predicted = logits.value().argmax(dim=2)
                 y_gold.append(y)
-                y_predicted += y_predicted_batch.tolist()                
                 
                 total_loss += loss.value()
                 log_average_loss = total_loss / (index+1)
+                
+                t.update(1)
                 t.set_postfix(loss=log_average_loss) 
                 
                   
@@ -271,7 +273,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
             score = 0.
-            if current_epoch%5==0:
+            if current_epoch%5000==0:                
                 score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
                 #score = 0
                 #eval = {}
@@ -288,29 +290,30 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 print(text)
                 log_object.text(text)
                 best_accuracy = score
-                model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
-                save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
+                #model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
+                #save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
             
             # plot attention_weights for the first example of the last batch (does not matter which batch)
             
             # batch_attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
-            _plot_attention_weights(x_batch, y_batch, src_i2w, tgt_i2w, batch_attention_weights, current_epoch, log_object)
+            #_plot_attention_weights(x_batch, y_batch, src_i2w, tgt_i2w, batch_attention_weights, current_epoch, log_object)
             
             # dev cleanup
-            del t, y_predicted_batch, y_gold, y_predicted
+            t.close()
+            del t#, y_predicted_batch, y_gold, y_predicted
             
         else: # disable patience if no dev provided and always save model 
             current_patience = patience
-            model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
-            save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+            #model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
+            #save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
         
         
         # end of epoch
         log_object.draw()
         log_object.draw(last_quarter=True) # draw a second graph with last 25% of results
         
-        model.save_checkpoint(model_store_path, "last", extra={"epoch":current_epoch})
-        save_optimizer_checkpoint (optimizer, model_store_path, extension="last")
+        #model.save_checkpoint(model_store_path, "last", extra={"epoch":current_epoch})
+        #save_optimizer_checkpoint (optimizer, model_store_path, extension="last")
 
         current_epoch += 1
 
@@ -341,8 +344,8 @@ if __name__ == "__main__":
         
     # DATA PREPARATION ######################################################
     print("Loading data ...")    
-    min_seq_len_X = 10
-    max_seq_len_X = 30
+    min_seq_len_X = 20
+    max_seq_len_X = 50
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
 
@@ -405,4 +408,4 @@ if __name__ == "__main__":
           tf_start_ratio=0.9,
           tf_end_ratio=0.1,
           tf_epochs_decay=50, 
-          batch_size = 256)
+          batch_size = 128)

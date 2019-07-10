@@ -73,11 +73,15 @@ class BiDataset():
         
         self.tgt_w2i = json.load(open(os.path.join(root_dir,"en_word2index.json")))
         self.tgt_i2w = json.load(open(os.path.join(root_dir,"en_index2word.json")))
-
+    
+    def reset (self):
+        self.i = 0
+        
     def __next__(self):
-        if self.i < len(self.X):
+        if self.i < len(self.X)-1:
             self.i+=1
             return self.X[self.i], self.y[self.i]
         raise StopIteration()
+    
     def __iter__(self):
         return self

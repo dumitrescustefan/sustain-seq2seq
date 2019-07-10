@@ -96,13 +96,15 @@ class Decoder():
         
     def forward(self, input, enc_output, teacher_forcing_ratio):         
         seq_len = len(input)
-        output = []
+        bos_vector = [0.] * self.dec_vocab_size
+        bos_vector[2] = 1.        
+        output = [dy.inputVector(bos_vector)]
         attention_weights = []
         rnn = self.rnn.initial_state([dy.inputVector(np.zeros(self.dec_hidden_dim)) for i in range(2*self.dec_num_layers)])
         #print("Start forward loop:")
         context, _ = self._attention(rnn.s(), enc_output)
         #context = enc_output[-1]
-        # input is a list of ints, starting with 2 "[BOS]"
+        # input is a list of ints, starting with 2 "[BOS]" 2 4 5 3
         for i in range(0, seq_len-1): # we stop when we feed the decoder the [EOS] and we take its output (thus the -1)
             # calculate the context vector at step i.
             # context is [encoder_size], attention_weights is [seq_len] # todo
@@ -119,7 +121,6 @@ class Decoder():
                 #index_vector = dy.inputVector(np.arange(self.dec_vocab_size))
                 argmax = dy.argmax(lin_output, gradient_mode='zero_gradient')
                 
-                #prev_predicted_word_index = dy.sum_elems(dy.cmult(index_vector, argmax))
                 prev_embedding = dy.dropout(self.embedding*argmax, self.dec_dropout) 
                 #prev_predicted_word_index = dy.sum_elems(dy.cmult(index_vector,dy.argmax(lin_output, gradient_mode='zero_gradient')))
                 #print(prev_predicted_word_index.value())
@@ -135,13 +136,9 @@ class Decoder():
             # Maps the decoder output to the decoder vocab size space. 
             lin_output = self.output_linear_W * dec_output + self.output_linear_b       
 
-            # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
-            #output = torch.cat((output, lin_output), dim=1)            
             output.append(lin_output)
             #print("Step {} predicted index = {}".format(i,np.argmax(lin_output.value())))
-            
-        # output is a tensor [batch_size, seq_len_dec, n_class]
-        # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
+        
         return output, attention_weights
         
         
@@ -177,11 +174,7 @@ class EncoderDecoder():
         
         output, attention_weights = self.decoder.forward(y, enc_output, teacher_forcing_ratio)
 
-        # prepend to output a [BOS] logit vector
-        bos_vector = [0.]* self.decoder.dec_vocab_size
-        bos_vector[2] = 1.
-        
-        return [dy.inputVector(bos_vector)] + output, attention_weights # output is logits
+        return output, attention_weights # output is a list of logits
 
     
         
