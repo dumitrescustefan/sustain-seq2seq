@@ -1,19 +1,6 @@
 import sys
 sys.path.insert(0, '../..')
-
 import os, subprocess, gc
-import torch
-import torch.nn as nn
-from models.util.log import Log
-from sklearn.metrics import accuracy_score
-from tqdm import tqdm
-import numpy as np
-from models.util.validation_metrics import evaluate
-import gc
-import torch
-import dynet as dy
-
-from models.dy.model import EncoderDecoder
 
 def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
     try:    
@@ -24,6 +11,52 @@ def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_
     except:
         print("Warning: Could execute 'nvidia-smi', default GPU selection is id=0")
         return 0
+
+
+if __name__ == "__main__":    
+    
+    # GPU SELECTION ########################################################
+    freer_gpu = get_freer_gpu()
+    print("Auto-selected GPU: " + str(freer_gpu))
+    
+    import dynet_config
+    dynet_config.set(mem=9000, random_seed=42, autobatch=True)
+    #dynet_config.set(random_seed=42, autobatch=False)
+    dynet_config.set_gpu(freer_gpu)
+    
+    
+    import dynet as dy
+    
+    """model = dy.Model()
+    emb = model.add_lookup_parameters((10,5))
+    for i in range(10):
+        v = [i]*5
+        print(v)
+        emb.init_row(i, v)
+    a = dy.inputVector([0.,0.,1.,0.,0.,0.,0.,0.,0.,0.])
+    c = emb*a
+    print(c.value())
+
+    
+    sys.exit(0)
+    """
+    # ######################################################################
+
+
+
+import torch
+import torch.nn as nn
+from models.util.log import Log
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+import numpy as np
+from models.util.validation_metrics import evaluate
+import gc
+import torch
+
+
+from models.dy.model import EncoderDecoder
+
 
 def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, log_object):
     # plot attention weights for the first example of the batch; USE ONLY FOR DEV where len(predicted_y)=len(gold_y)
@@ -110,7 +143,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
 #def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
           resume=False, max_epochs=100000, patience=10, optimizer=None, lr_scheduler=None,
-          tf_start_ratio=0., tf_end_ratio=0., tf_epochs_decay=0): # teacher forcing parameters
+          tf_start_ratio=0., tf_end_ratio=0., tf_epochs_decay=0, batch_size=32): # teacher forcing parameters
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
@@ -119,19 +152,14 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_path = os.path.join(model_store_path,"log")
     log_object = Log(log_path, clear=True)
     log_object.text("Training model: "+model.__class__.__name__)
-    log_object.text("\tresume={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
-    total_params = sum(p.numel() for p in model.parameters())/1000
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)/1000
-    log_object.text("\ttotal_parameters={}K, trainable_parameters={}K".format(total_params, trainable_params))
+    log_object.text("\tresume={}, batch_size={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, batch_size, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
+    
     log_object.text(model.__dict__)
     log_object.text()
         
     print("Working in folder [{}]".format(model_store_path))
     
-    #criterion = nn.CrossEntropyLoss(ignore_index=0)
-    
     n_class = len(tgt_i2w)
-    batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
     current_patience = patience
     best_accuracy = 0.
@@ -150,7 +178,6 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         log_object.text(text)        
     
     while current_patience > 0 and current_epoch < max_epochs:        
-        #mem_report()
         print("_"*120+"\n")             
         
         # teacher forcing ratio for current epoch
@@ -168,62 +195,42 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         # train
         model.train()
-        total_loss, log_average_loss = 0, 0        
-        t = tqdm(len(train_loader.X), ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="inst")
-        for index, _ in enumerate(t):        
-            #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
-            X = train_loader.X[index]
-            y = train_loader.y[index]
+        total_loss, log_average_loss = 0, 0  
+        batch_current_counter = 0
+        completed_batches = 0
+        batch_losses = []        
+        dy.renew_cg()
+        t = tqdm(total=len(train_loader.X), ncols=120, mininterval=0.5, smoothing = 1., desc="Epoch " + str(current_epoch)+" [train]", unit="inst")
+        for index, (X, y) in enumerate(train_loader):                            
             
-            optimizer.zero_grad()
+            logits, _ = model.forward(X, y, tf_ratio)
             
-            # x_batch and y_batch shapes: [bs, padded_sequence]            
-            output, _ = model.forward(x_batch, y_batch, tf_ratio)
-            # output shape: [bs, padded_sequence, n_class]
+            losses = []
+            for logit, true_y in zip(logits, y):
+                losses.append(dy.pickneglogsoftmax(logit, true_y))
+            loss = dy.esum(losses)
             
+            batch_losses.append(loss)
+            batch_current_counter+=1
             
-            loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+            if batch_current_counter >= batch_size:
+                batch_current_counter = 0 
+                completed_batches += 1
+                batch_loss = dy.esum(batch_losses) / batch_size                
+                total_loss += batch_loss.value()
+                batch_loss.backward()
+                optimizer.update()
+                batch_losses = []
+                dy.renew_cg()
+                log_average_loss = total_loss / completed_batches
+                t.update(batch_size)
+                t.set_postfix(loss=log_average_loss, x_y_len=str(len(X))+"/"+str(len(y)) )#, lr = current_scheduler_lr)#, cur_loss = loss.value())
             
-            
-           
-            loss.backward()
-            #torch.nn.utils.clip_grad_norm_(model.parameters(), 1.) # parametrize clip value TODO, also what is a good value? 0.1, 0.5, 1 or 5?            
-            #if lr_scheduler is not None:
-            #    lr_scheduler.step()
-            optimizer.step()
-             
-            total_loss += loss.item()
-            log_average_loss = total_loss / (batch_index+1)
-            
-            current_scheduler_lr = "-"
-            if lr_scheduler is not None:
-                current_scheduler_lr = lr_scheduler.get_lr()[0]
-            
-            t.set_postfix(loss=log_average_loss, x_y_len=str(len(X))+"/"+str(len(y)) , lr = current_scheduler_lr, cur_loss = loss.item())
-            
-            #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, loss.item(), y_index = 0)
-            #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, current_scheduler_lr, y_index = 1)
-            #log_object.draw()
-            #log_object.draw(last_quarter=True)
-            
-            
-            
-            #del output, x_batch, y_batch, loss #, l2_reg
-            #torch.cuda.empty_cache()
-            #if model.cuda:                        
-            #    torch.cuda.synchronize()
-                            
-        #del t
+        
+        t.close()                  
+        del t
         gc.collect()
         
-        if model.cuda:
-            torch.cuda.empty_cache()
-        
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_allocated()/1024/1024, y_index=0)
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_cached()/1024/1024, y_index=2)
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
-        #log_object.draw()
         
         log_object.text("\ttraining_loss={}".format(log_average_loss))
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
@@ -232,39 +239,34 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         # dev        
         if valid_loader is not None:
             model.eval()
-            with torch.no_grad():
-                total_loss = 0
-                _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
+            
+            total_loss = 0
+            _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
 
-                t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
-                y_gold = list()
-                y_predicted = list()
+            t = tqdm(total=len(valid_loader.X), ncols=120, mininterval=0.5, smoothing = 1., desc="Epoch " + str(current_epoch)+" [valid]", unit="inst")
+            y_gold = list()
+            y_predicted = list()
+            
+            for index, (X, y) in enumerate(valid_loader):                            
+                #if hasattr(model.decoder.attention, 'reset_coverage'):
+                #    model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+                    
+                logits, attention_weights = model.forward(X, y)
+                losses = []
+                #y_predicted
+                for logit, true_y in zip(logits, y):
+                    losses.append(dy.pickneglogsoftmax(logit, true_y))
+                loss = dy.esum(losses)
                 
-                for batch_index, (x_batch, y_batch) in enumerate(t):                            
-                    if model.cuda:
-                        x_batch = x_batch.cuda()
-                        y_batch = y_batch.cuda()
-                    
-                    if hasattr(model.decoder.attention, 'reset_coverage'):
-                        model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
-                        
-                    output, batch_attention_weights = model.forward(x_batch, y_batch)
-                    loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
-                    
-                    y_predicted_batch = output.argmax(dim=2)
-                    y_gold += y_batch.tolist()
-                    y_predicted += y_predicted_batch.tolist()                
-                    
-                    total_loss += loss.data.item()
-                    log_average_loss = total_loss / (batch_index+1)
-                    t.set_postfix(loss=log_average_loss) 
-                    
-                    del output, loss
-                    
-                if model.cuda:
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-                        
+                y_predicted = logits.value().argmax(dim=2)
+                y_gold.append(y)
+                y_predicted += y_predicted_batch.tolist()                
+                
+                total_loss += loss.value()
+                log_average_loss = total_loss / (index+1)
+                t.set_postfix(loss=log_average_loss) 
+                
+                  
             log_object.text("\tvalidation_loss={}".format(log_average_loss))
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
@@ -336,11 +338,11 @@ def load_optimizer_checkpoint (optimizer, cuda, folder, extension):
 
 
 if __name__ == "__main__":    
-    
+        
     # DATA PREPARATION ######################################################
     print("Loading data ...")    
-    min_seq_len_X = 5
-    max_seq_len_X = 15
+    min_seq_len_X = 10
+    max_seq_len_X = 30
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
 
@@ -363,39 +365,32 @@ if __name__ == "__main__":
     #valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
-    # GPU SELECTION ########################################################
-    if torch.cuda.is_available():
-        freer_gpu = get_freer_gpu()
-        print("Auto-selected GPU: " + str(freer_gpu))
-        torch.cuda.set_device(freer_gpu)
-    # ######################################################################
-    
     # MODEL TRAINING #######################################################
     
-    model = EncoderDecoder(
+    network = EncoderDecoder(dy.Model(), 
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=256,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=1,
                 enc_dropout=0.33,
-                enc_lstm_dropout=0.33,
-                dec_input_dim=256, 
+                enc_lstm_dropout=0.33,                
                 dec_emb_dim=256,
                 dec_hidden_dim=256,
                 dec_num_layers=1,
-                dec_dropout=0.33,
-                dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "additive")
+                dec_lstm_dropout=0.33,
+                dec_dropout=0.33,
+                attention_type = "additive")
     
     print("_"*80+"\n")
-    print(model)
+    print(network)
     print("_"*80+"\n")
     
-    #optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
+    
+    optimizer = dy.AdamTrainer(network.model, alpha=2e-3, beta_1=0.9, beta_2=0.9)
     lr_scheduler = None
     
-    train(model, 
+    train(network, 
           src_i2w, 
           tgt_i2w,
           train_loader, 
@@ -409,4 +404,5 @@ if __name__ == "__main__":
           lr_scheduler = lr_scheduler,
           tf_start_ratio=0.9,
           tf_end_ratio=0.1,
-          tf_epochs_decay=50)
+          tf_epochs_decay=50, 
+          batch_size = 256)
