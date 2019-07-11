@@ -1,13 +1,14 @@
 import sys
 sys.path.insert(0, '../..')
 
-import os, subprocess, gc
+import os, subprocess, gc, time
 import torch
 import torch.nn as nn
 from models.util.log import Log
 from tqdm import tqdm
 import numpy as np
 from models.util.validation_metrics import evaluate
+from models.util.utils import pretty_time
 
 def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
     try:    
@@ -69,7 +70,8 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
             if token not in src_i2w.keys():
                 print(src_i2w['1'] + " ", end='')
             elif token == '3':
-                print(src_i2w['3'], end='')                
+                print(src_i2w['3'], end='')   
+                break
             else:
                 print(src_i2w[token] + " ", end='')
         
@@ -129,6 +131,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
     current_patience = patience
+    current_epoch_time = "?"
+    current_epoch_train_time = "?"
+    current_epoch_dev_time = "?"
+    current_epoch_test_time = "?"
     best_accuracy = 0.
 
     # Calculates the decay per epoch. Returns a vector of decays.
@@ -155,13 +161,14 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 tf_ratio = epoch_decay[current_epoch]
             else: 
                 tf_ratio = tf_end_ratio        
-        
-        text = "Starting epoch {}: current_patience={}, tf_ratio={:.4f} ".format(current_epoch, current_patience, tf_ratio) 
+       
+        text = "Starting epoch {}: current_patience={}, time_per_epoch={} ({}/{}/{}), tf_ratio={:.4f} ".format(current_epoch, current_patience,  current_epoch_time, current_epoch_train_time, current_epoch_dev_time, current_epoch_test_time, tf_ratio) 
         print(text)
         log_object.text()
         log_object.text(text)
         
         # train
+        time_start = time.time()
         model.train()
         total_loss, log_average_loss = 0, 0        
         t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b")
@@ -254,10 +261,12 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         log_object.text("\ttraining_loss={}".format(log_average_loss))
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
-        
+        time_train = time.time() - time_start
 
         # dev        
+        time_start = time.time()        
         if valid_loader is not None:
+            
             model.eval()
             with torch.no_grad():
                 total_loss = 0
@@ -330,7 +339,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             current_patience = patience
             model.save_checkpoint(model_store_path, "best", extra={"epoch":current_epoch})
             save_optimizer_checkpoint (optimizer, model_store_path, extension="best")
+        time_dev = time.time() - time_start
+        # end dev
         
+        time_test = 0
         
         # end of epoch
         log_object.draw()
@@ -340,7 +352,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         save_optimizer_checkpoint (optimizer, model_store_path, extension="last")
 
         current_epoch += 1
-
+        current_epoch_time = pretty_time(time_train+time_dev+time_test)
+        current_epoch_train_time = pretty_time(time_train)
+        current_epoch_dev_time = pretty_time(time_dev)
+        current_epoch_test_time = pretty_time(time_test)
 
 def save_optimizer_checkpoint (optimizer, folder, extension):
     filename = os.path.join(folder, "checkpoint_optimizer."+extension)
