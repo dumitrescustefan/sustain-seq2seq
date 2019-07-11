@@ -36,7 +36,7 @@ class Encoder():
         if self.training:
             embeddings = [dy.dropout(x, self.enc_dropout) for x in embeddings]
       
-        output = self.rnn.transduce(embeddings) # TODO state resets at each transduce call??
+        output = self.rnn.transduce(embeddings) 
         
         return output
         
@@ -114,9 +114,9 @@ class Decoder():
             # save attention weights incrementally
             attention_weights.append(step_attention_weights)
             
-            if np.random.uniform(0, 1) < teacher_forcing_ratio or i is 0:
-                word_embedding = dy.dropout(self.embedding[input[i]], self.dec_dropout)                                
-            else:
+            #if np.random.uniform(0, 1) < teacher_forcing_ratio or i is 0:
+            word_embedding = dy.dropout(self.embedding[input[i]], self.dec_dropout)                                
+            """else:
                 #prev_predicted_word_index = np.argmax(lin_output.value()) 
                 #index_vector = dy.inputVector(np.arange(self.dec_vocab_size))
                 argmax = dy.argmax(lin_output, gradient_mode='zero_gradient')
@@ -125,7 +125,7 @@ class Decoder():
                 #prev_predicted_word_index = dy.sum_elems(dy.cmult(index_vector,dy.argmax(lin_output, gradient_mode='zero_gradient')))
                 #print(prev_predicted_word_index.value())
                 #word_embedding = dy.dropout(self.embedding[prev_predicted_word_index], self.dec_dropout) 
-                
+            """     
             lstm_input = dy.concatenate([word_embedding, context])
             
             rnn=rnn.add_input(lstm_input) 
@@ -134,7 +134,7 @@ class Decoder():
             dec_output = rnn.output()
             
             # Maps the decoder output to the decoder vocab size space. 
-            lin_output = self.output_linear_W * dec_output + self.output_linear_b       
+            lin_output = self.output_linear_W.expr(update=True) * dec_output + self.output_linear_b.expr(update=True) 
 
             output.append(lin_output)
             #print("Step {} predicted index = {}".format(i,np.argmax(lin_output.value())))

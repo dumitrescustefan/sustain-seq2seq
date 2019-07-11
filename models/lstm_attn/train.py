@@ -10,18 +10,36 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 256
-    min_seq_len_X = 10
-    max_seq_len_X = 30
+   
+    # FR-EN test
+    """
+     batch_size = 256
+    min_seq_len_X = 20
+    max_seq_len_X = 50
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
-
-    #from data.roen.loader import loader
-    #data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
-    #from data.fren.loader import loader
     from models.util.loaders.standard import loader
     data_folder = os.path.join("..", "..", "data", "fren", "ready")
-    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    src_w2i = "fr_word2index.json"
+    src_i2w = "fr_index2word.json"
+    tgt_w2i = "en_word2index.json"
+    tgt_i2w = "en_index2word.json"
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    """
+    
+    # CMUDICT test
+    batch_size = 64
+    min_seq_len_X = 0
+    max_seq_len_X = 10000
+    min_seq_len_y = min_seq_len_X
+    max_seq_len_y = max_seq_len_X
+    from models.util.loaders.standard import loader
+    data_folder = os.path.join("..", "..", "data", "cmudict", "ready")
+    src_w2i = "X_word2index.json"
+    src_i2w = "X_index2word.json"
+    tgt_w2i = "y_word2index.json"
+    tgt_i2w = "y_index2word.json"
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -76,6 +94,7 @@ if __name__ == "__main__":
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9)
     lr_scheduler = None
     
     train(model, 

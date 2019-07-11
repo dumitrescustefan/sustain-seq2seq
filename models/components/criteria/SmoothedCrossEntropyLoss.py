@@ -15,7 +15,7 @@ class SmoothedCrossEntropyLoss(nn.Module):
         loss value
     
     """
-    def __init__(self, ignore_index=0, label_smoothing=1.):
+    def __init__(self, ignore_index=-1, label_smoothing=1.):
 
         super().__init__()
         self.padding_idx = ignore_index
@@ -23,9 +23,11 @@ class SmoothedCrossEntropyLoss(nn.Module):
 
         if label_smoothing < 1.:
             self.criterion = nn.KLDivLoss(reduction='batchmean') #size_average=False)            
-        else:
+        elif ignore_index>=0:
             self.criterion = nn.CrossEntropyLoss(ignore_index=ignore_index)
-        
+        else:
+            self.criterion = nn.CrossEntropyLoss()
+            
     def not_used_compute_loss(self, generator, dec_outs, labels):
 
         scores = generator(self._bottle(dec_outs)) # [batch_size * seq_len, d_words]

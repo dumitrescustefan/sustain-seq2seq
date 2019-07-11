@@ -5,12 +5,9 @@ import os, subprocess, gc
 import torch
 import torch.nn as nn
 from models.util.log import Log
-from sklearn.metrics import accuracy_score
 from tqdm import tqdm
 import numpy as np
 from models.util.validation_metrics import evaluate
-import gc
-import torch
 
 def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
     try:    
@@ -66,18 +63,17 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     for i in range(seq_len):        
         print("X   :", end='')
         for j in range(len(X_sample[i])):
-            print(str(X_sample[i][j].item()) + " ", end='')
-        """for j in range(len(X_sample[i])):
-            token = str(X_sample[i][j].item())
-
-            if token not in src_i2w.keys():
-                print(src_i2w['1'] + " ", end='')
-            elif token == '3':
-                print(src_i2w['3'], end='')
-                break
-            else:
-                print(src_i2w[token] + " ", end='')
-        """
+            #print(str(X_sample[i][j].item()) + " ", end='')
+            for j in range(len(X_sample[i])):
+                token = str(X_sample[i][j].item())
+                
+                if token not in src_i2w.keys():
+                    print(src_i2w['1'] + " ", end='')
+                elif token == '3':
+                    print(src_i2w['3'], end='')                
+                else:
+                    print(src_i2w[token] + " ", end='')
+        
         print("\nY   :", end='')
         for j in range(len(y_sample[i])):
             token = str(y_sample[i][j].item())
@@ -85,8 +81,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
             if token not in tgt_i2w.keys():
                 print(tgt_i2w['1'] + " ", end='')
             elif token == '3':
-                print(tgt_i2w['3'], end='')
-                break
+                print(tgt_i2w['3'] + " ", end='')                
             else:
                 print(tgt_i2w[token] + " ", end='')
         print("\nPRED:", end='')
@@ -96,8 +91,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
             if token not in tgt_i2w.keys():
                 print(tgt_i2w['1'] + " ", end='')
             elif token == '3':
-                print(tgt_i2w['3'], end='')
-                break
+                print(tgt_i2w['3'] + " ", end='')                
             else:
                 print(tgt_i2w[token] + " ", end='')
         print()
@@ -127,7 +121,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     
     #criterion = nn.CrossEntropyLoss(ignore_index=0)
     from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
-    criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)
+    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)    
+    criterion = SmoothedCrossEntropyLoss(label_smoothing=1.) # simple crossentropy, no ignore index set
+    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
+    #criterion = SmoothedCrossEntropyLoss(label_smoothing=0.9) # KL divergence
     
     n_class = len(tgt_i2w)
     batch_size = len(train_loader.dataset.X[0])
@@ -300,15 +297,17 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
             score = 0.
-            if current_epoch%5==0:
-                score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
+            if True: #current_epoch%5==0:
+                #score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
+                score, eval = evaluate(y_gold, y_predicted, tgt_i2w, cut_at_eos=True, use_accuracy=False, use_bleu=False)            
                 #score = 0
                 #eval = {}
                 #eval["meteor"], eval["rouge_l_f"] = 0, 0
                 log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
                 #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
+                log_object.var("Sequence Error Scores|Dev scores|Test scores", current_epoch, eval["ser"], y_index=0)            
                 
-                text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score)
+                text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , SER={:.4f}, average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], eval["ser"], score)
                 print(text)
                 log_object.text(text)
            

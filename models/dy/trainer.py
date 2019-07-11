@@ -247,7 +247,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             y_gold = list()
             y_predicted = list()
             
-            for index, (X, y) in enumerate(valid_loader):                            
+            for index, (X, y) in enumerate(valid_loader):
+                dy.renew_cg()            
                 #if hasattr(model.decoder.attention, 'reset_coverage'):
                 #    model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
                     
