@@ -63,16 +63,15 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     for i in range(seq_len):        
         print("X   :", end='')
         for j in range(len(X_sample[i])):
-            #print(str(X_sample[i][j].item()) + " ", end='')
-            for j in range(len(X_sample[i])):
-                token = str(X_sample[i][j].item())
-                
-                if token not in src_i2w.keys():
-                    print(src_i2w['1'] + " ", end='')
-                elif token == '3':
-                    print(src_i2w['3'], end='')                
-                else:
-                    print(src_i2w[token] + " ", end='')
+            #print(str(X_sample[i][j].item()) + " ", end='')        
+            token = str(X_sample[i][j].item())
+            
+            if token not in src_i2w.keys():
+                print(src_i2w['1'] + " ", end='')
+            elif token == '3':
+                print(src_i2w['3'], end='')                
+            else:
+                print(src_i2w[token] + " ", end='')
         
         print("\nY   :", end='')
         for j in range(len(y_sample[i])):
@@ -335,7 +334,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         # end of epoch
         log_object.draw()
-        log_object.draw(last_quarter=True) # draw a second graph with last 25% of results
+        #log_object.draw(last_quarter=True) # draw a second graph with last 25% of results
         
         model.save_checkpoint(model_store_path, "last", extra={"epoch":current_epoch})
         save_optimizer_checkpoint (optimizer, model_store_path, extension="last")

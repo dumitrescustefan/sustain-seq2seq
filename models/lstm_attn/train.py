@@ -64,7 +64,7 @@ if __name__ == "__main__":
         
     model = LSTMEncoderDecoderWithAttention(
                 enc_vocab_size=len(src_w2i),
-                enc_emb_dim=256,
+                enc_emb_dim=64,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=1,
                 enc_dropout=0.33,
@@ -76,7 +76,7 @@ if __name__ == "__main__":
                 dec_dropout=0.33,
                 dec_lstm_dropout=0.33,
                 dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "coverage",
+                dec_attention_type = "additive",
                 dec_transfer_hidden=True)
     
     print("_"*80+"\n")
@@ -93,8 +93,9 @@ if __name__ == "__main__":
     print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=1., momentum=0.9)
+    #optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
+    optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=0.9)
+    
     lr_scheduler = None
     
     train(model, 
