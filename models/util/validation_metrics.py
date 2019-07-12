@@ -2,11 +2,11 @@ from models.util.metrics.accuracy import accuracy_score
 from models.util.metrics.bleu import bleu_score
 from models.util.metrics.rouge import rouge_l_score
 from models.util.metrics.meteor import meteor_score
-from models.util.metrics.ser import sequence_error_rate
+from models.util.metrics.sar import sequence_accuracy_rate
 import torch
 
 
-def evaluate(y_true, y_pred, i2w, cut_at_eos=False, use_accuracy=True, use_bleu=True, use_meteor=True, use_rogue=True, use_sequence_error_rate=True):
+def evaluate(y_true, y_pred, i2w, cut_at_eos=False, use_accuracy=True, use_bleu=True, use_meteor=True, use_rogue=True, use_sequence_accuracy_rate=True):
     #print("\nEvaluation results:\n")
     if cut_at_eos:
         y_true_eos = []        
@@ -58,8 +58,8 @@ def evaluate(y_true, y_pred, i2w, cut_at_eos=False, use_accuracy=True, use_bleu=
         eval["rouge_l_f"] = rouge_f
         eval["score"] += rouge_f
         count+=1.
-    if use_sequence_error_rate:
-        eval["ser"] = sequence_error_rate(y_true, y_pred)
+    if use_sequence_accuracy_rate:
+        eval["sar"] = sequence_accuracy_rate(y_true, y_pred)
     
     eval["score"] = eval["score"]/count
     return eval["score"], eval

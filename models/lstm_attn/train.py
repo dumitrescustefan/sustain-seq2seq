@@ -28,7 +28,7 @@ if __name__ == "__main__":
     """
     
     # CMUDICT test
-    batch_size = 64
+    batch_size = 128
     min_seq_len_X = 0
     max_seq_len_X = 10000
     min_seq_len_y = min_seq_len_X
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     
     # MODEL TRAINING #######################################################
         
-    model = LSTMEncoderDecoderWithAttention(
+    """model = LSTMEncoderDecoderWithAttention(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=64,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
@@ -78,7 +78,24 @@ if __name__ == "__main__":
                 dec_vocab_size=len(tgt_w2i),
                 dec_attention_type = "additive",
                 dec_transfer_hidden=True)
-    
+    """
+    model = LSTMEncoderDecoderWithAttention(
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=100,
+                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.1,
+                enc_lstm_dropout=0.1,
+                dec_input_dim=100, 
+                dec_emb_dim=100,
+                dec_hidden_dim=100,
+                dec_num_layers=2,
+                dec_dropout=0.1,
+                dec_lstm_dropout=0.1,
+                dec_vocab_size=len(tgt_w2i),
+                dec_attention_type = "additive",
+                dec_transfer_hidden=True)
+                
     print("_"*80+"\n")
     print(model)
     print("_"*80+"\n")

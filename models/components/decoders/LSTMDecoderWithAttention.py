@@ -1,9 +1,12 @@
 import sys
 sys.path.insert(0, '../../..')
 
-import torch
-
 import numpy as np
+
+import torch
+import torch.nn as nn
+
+
 
 from models.components.attention.Attention import Attention
 from models.components.decoders.LSTMDecoder import LSTMDecoder
@@ -24,6 +27,10 @@ class LSTMDecoderWithAttention(LSTMDecoder):
         
         self.n_class = n_class
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, device=device, type=attention_type)
+
+        # overwrite output to allow context from the attention to be added to the output layer
+        self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, int((hidden_dim+input_size+emb_dim)/2))
+        self.softmax_linear = nn.Linear(int((hidden_dim+input_size+emb_dim)/2), n_class)
 
         self.to(device)
 
@@ -52,28 +59,29 @@ class LSTMDecoderWithAttention(LSTMDecoder):
                 # Concatenates the i-th embedding of the input with the corresponding  context vector over the second
                 # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
                 # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].                        
-                lstm_input = torch.cat((self.dropout(self.embedding(input[:, i])), context_vector), dim=1).reshape(batch_size, 1, -1)
+                prev_output_embeddings = self.dropout(self.embedding(input[:, i]))               
             else:
                 # Calculates the embeddings of the previous output. Counts the argmax over the last third dimension and
                 # then squeezes the second dimension, the sequence length. [batch_size, emb_dim].
-                prev_output_embeddings = self.dropout(self.embedding(torch.squeeze(torch.argmax(lin_output, dim=2), dim=1)))
+                prev_output_embeddings = self.dropout(self.embedding(torch.squeeze(torch.argmax(softmax_output, dim=2), dim=1)))
                 
-                # Concatenates the (i-1)-th embedding of the previous output with the corresponding  context vector over the second
-                # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
-                # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
-                lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
+            # Concatenates the (i-1)-th embedding of the previous output with the corresponding  context vector over the second
+            # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +
+            # [batch_size, hidden_dim * num_layers] -> [batch_size, 1, emb_dim + hidden_dim * num_layers].
+            lstm_input = torch.cat((prev_output_embeddings, context_vector), dim=1).reshape(batch_size, 1, -1)
 
             # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
             # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
             dec_output, dec_states = self.lstm(lstm_input, dec_states)
 
             # Maps the decoder output to the decoder vocab size space. 
-            # [batch_size, 1, hidden_dim] -> [batch_size, 1, n_class].
-            lin_output = self.output_linear(dec_output)            
-
+            # [batch_size, 1, hidden_dim + encoder_dim + emb_dim] -> [batch_size, 1, n_class].            
+            lin_input = torch.cat( (dec_output, context_vector.unsqueeze(1), prev_output_embeddings.unsqueeze(1)) , dim = 2)
+            lin_output = self.output_linear(lin_input) #lin_output = self.output_linear(dec_output)    
+            softmax_output = self.softmax_linear(torch.tanh(lin_output))
             # Adds the current output to the final output. [batch_size, i-1, n_class] -> [batch_size, i, n_class].
             #output = torch.cat((output, lin_output), dim=1)            
-            output[:,i,:] = lin_output.squeeze(1)
+            output[:,i,:] = softmax_output.squeeze(1)
             
         # output is a tensor [batch_size, seq_len_dec, n_class]
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep

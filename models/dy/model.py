@@ -112,7 +112,7 @@ class Decoder():
             #context = enc_output[-1]
             step_attention_weights = []
             # save attention weights incrementally
-            attention_weights.append(step_attention_weights)
+            #attention_weights.append(step_attention_weights)
             
             #if np.random.uniform(0, 1) < teacher_forcing_ratio or i is 0:
             word_embedding = dy.dropout(self.embedding[input[i]], self.dec_dropout)                                

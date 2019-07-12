@@ -95,7 +95,7 @@ class RNNEncoderDecoder(nn.Module):
 
         # Transforms the hidden and the cell state of the encoder lstm layer to correspond to the decoder lstm states dimensions.
         # [batch_size, enc_num_layers * enc_hidden_dim * 2] -> [batch_size, dec_num_layers * dec_hidden_dim].
-        dec_states = (self.h_state_linear(enc_states[0]), self.c_state_linear(enc_states[1]))
+        dec_states = (torch.tanh(self.h_state_linear(enc_states[0])), torch.tanh(self.c_state_linear(enc_states[1])))
 
         # Reshapes the states to have the correct shape for the decoder lstm states dimension. Reshape the states from
         # 2-D to 3-D sequence. Permutes the batch_size to the second dimension.

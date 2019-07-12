@@ -111,20 +111,20 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_path = os.path.join(model_store_path,"log")
     log_object = Log(log_path, clear=True)
     log_object.text("Training model: "+model.__class__.__name__)
-    log_object.text("\tresume={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
+    log_object.text("\tresume={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay), display = False)
     total_params = sum(p.numel() for p in model.parameters())/1000
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)/1000
     log_object.text("\ttotal_parameters={}K, trainable_parameters={}K".format(total_params, trainable_params))
-    log_object.text(model.__dict__)
-    log_object.text()
+    log_object.text(model.__dict__, display = False)
+    log_object.text("", display = False)
         
     print("Working in folder [{}]".format(model_store_path))
     
     #criterion = nn.CrossEntropyLoss(ignore_index=0)
     from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
     #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)    
-    criterion = SmoothedCrossEntropyLoss(label_smoothing=1.) # simple crossentropy, no ignore index set
-    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
+    #criterion = SmoothedCrossEntropyLoss(label_smoothing=1.) # simple crossentropy, no ignore index set
+    criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
     #criterion = SmoothedCrossEntropyLoss(label_smoothing=0.9) # KL divergence
     
     n_class = len(tgt_i2w)
@@ -145,10 +145,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         extra_variables = model.load_checkpoint(model_store_path, extension="last")                
         load_optimizer_checkpoint(optimizer, model.cuda, model_store_path, extension="last")
         if "epoch" in extra_variables:
-            current_epoch = extra_variables["epoch"]                
-        text="Resuming training from epoch {}".format(current_epoch)
-        print(text)
-        log_object.text(text)        
+            current_epoch = extra_variables["epoch"]                        
+        log_object.text("Resuming training from epoch {}".format(current_epoch))        
     
     while current_patience > 0 and current_epoch < max_epochs:        
         #mem_report()
@@ -162,10 +160,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             else: 
                 tf_ratio = tf_end_ratio        
        
-        text = "Starting epoch {}: current_patience={}, time_per_epoch={} ({}/{}/{}), tf_ratio={:.4f} ".format(current_epoch, current_patience,  current_epoch_time, current_epoch_train_time, current_epoch_dev_time, current_epoch_test_time, tf_ratio) 
-        print(text)
-        log_object.text()
-        log_object.text(text)
+        
+        log_object.text("")
+        log_object.text("Starting epoch {}: current_patience={}, time_per_epoch={} ({}/{}/{}), tf_ratio={:.4f} ".format(current_epoch, current_patience,  current_epoch_time, current_epoch_train_time, current_epoch_dev_time, current_epoch_test_time, tf_ratio) )
         
         # train
         time_start = time.time()
@@ -187,20 +184,21 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             output, _ = model.forward(x_batch, y_batch, tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             
-            if torch.isnan(output).sum()>0:
+            """if torch.isnan(output).sum()>0:
                 print("FOUND NAN in output")
                 print(output)
                 print(loss)
                 sys.exit(1)
-                
+            """ 
             
             loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
             
-            if torch.isnan(loss).sum()>0:
+            """if torch.isnan(loss).sum()>0:
                 print("FOUND NAN in loss")
                 print(output)
                 print(loss)
                 sys.exit(1)
+            """
             """iloss = loss.item()
             
             # L2 regularization on attention
@@ -259,7 +257,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
         #log_object.draw()
         
-        log_object.text("\ttraining_loss={}".format(log_average_loss))
+        log_object.text("\ttraining_loss={}".format(log_average_loss), display = False)
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
         time_train = time.time() - time_start
 
@@ -301,7 +299,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
                         
-            log_object.text("\tvalidation_loss={}".format(log_average_loss))
+            log_object.text("\tvalidation_loss={}".format(log_average_loss), display = False)
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
             score = 0.
@@ -313,22 +311,19 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 #eval["meteor"], eval["rouge_l_f"] = 0, 0
                 log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
                 #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
-                log_object.var("Sequence Error Scores|Dev scores|Test scores", current_epoch, eval["ser"], y_index=0)            
+                log_object.var("Sequence Accuracy Scores|Dev scores|Test scores", current_epoch, eval["sar"], y_index=0)            
                 
-                text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , SER={:.4f}, average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], eval["ser"], score)
-                print(text)
-                log_object.text(text)
+                log_object.text("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f}, average={:.4f}, SAR={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score, eval["sar"]))
+                score = eval["sar"]
            
             if score > best_accuracy:
-                text = "\tBest score = {:.4f}".format(score)
-                print(text)
-                log_object.text(text)
+                log_object.text("\tBest score = {:.4f}".format(score))
                 best_accuracy = score
                 model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
+                current_patience = patience
             
-            # plot attention_weights for the first example of the last batch (does not matter which batch)
-            
+            # plot attention_weights for the first example of the last batch (does not matter which batch)            
             # batch_attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
             _plot_attention_weights(x_batch, y_batch, src_i2w, tgt_i2w, batch_attention_weights, current_epoch, log_object)
             
@@ -342,7 +337,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         time_dev = time.time() - time_start
         # end dev
         
+        # start test 
         time_test = 0
+        # end test
         
         # end of epoch
         log_object.draw()
@@ -352,6 +349,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         save_optimizer_checkpoint (optimizer, model_store_path, extension="last")
 
         current_epoch += 1
+        current_patience -= 1
         current_epoch_time = pretty_time(time_train+time_dev+time_test)
         current_epoch_train_time = pretty_time(time_train)
         current_epoch_dev_time = pretty_time(time_dev)

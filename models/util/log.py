@@ -69,7 +69,10 @@ class Log():
         with open(self._json_file, "w+", encoding="utf-8") as f:
             json.dump(js, f)
     
-    def text(self, text=""):
+    def text(self, text="", display=True):
+        if display:
+            print(text)    
+            
         if isinstance(text, str):
             if text.strip()!="":                
                 txt = "[{}] {}\n".format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), text.rstrip())
@@ -105,7 +108,7 @@ class Log():
                 
                 # for each dimension
                 plt.clf()   
-                plt.figure(figsize=(12,10))
+                plt.figure(figsize=(16,10))
                 plt.tight_layout()
                 plt.title(name + ("" if not last_quarter else " (Last quarter)"))
                 
@@ -163,6 +166,7 @@ class Log():
         g = sns.heatmap(x, cmap="copper", xticklabels=output_labels, yticklabels=input_labels)
         g.set_yticklabels(g.get_yticklabels(), rotation = 0)
         g.set_xticklabels(g.get_xticklabels(), rotation = 90)
+        #fig.tick_params(axis="x", bottom=True, top=True, labelbottom=True, labeltop=True)        
         plt.title('Attention at epoch '+str(epoch))
         plt.tight_layout()            
         fig.savefig(os.path.join(self.folder, "attention_"+str(epoch).zfill(4)), bbox_inches='tight')

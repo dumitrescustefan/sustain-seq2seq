@@ -9,7 +9,7 @@ def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_
         memory_available = [int(x.strip().split()[2]) for x in os_string]
         return int(np.argmax(memory_available))
     except:
-        print("Warning: Could execute 'nvidia-smi', default GPU selection is id=0")
+        print("Warning: Could not execute 'nvidia-smi', default GPU selection is id=0")
         return 0
 
 
@@ -20,9 +20,10 @@ if __name__ == "__main__":
     print("Auto-selected GPU: " + str(freer_gpu))
     
     import dynet_config
-    dynet_config.set(mem=9000, random_seed=42, autobatch=True)
-    #dynet_config.set(random_seed=42, autobatch=False)
-    dynet_config.set_gpu(freer_gpu)
+    #dynet_config.set(mem=9000, random_seed=42, autobatch=True)
+    #dynet_config.set(mem=3500, random_seed=42, autobatch=True)
+    dynet_config.set(random_seed=42, autobatch=False)
+    #dynet_config.set_gpu(freer_gpu)
     
     
     import dynet as dy
@@ -143,6 +144,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
           resume=False, max_epochs=100000, patience=10, optimizer=None, lr_scheduler=None,
           tf_start_ratio=0., tf_end_ratio=0., tf_epochs_decay=0, batch_size=32): # teacher forcing parameters
+    
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
     if not os.path.exists(model_store_path):
@@ -151,10 +153,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     log_path = os.path.join(model_store_path,"log")
     log_object = Log(log_path, clear=True)
     log_object.text("Training model: "+model.__class__.__name__)
-    log_object.text("\tresume={}, batch_size={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, batch_size, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay))
-    
-    log_object.text(model.__dict__)
-    log_object.text()
+    log_object.text("\tresume={}, batch_size={}, patience={}, teacher_forcing={}->{} in {} epochs".format(resume, batch_size, patience, tf_start_ratio, tf_end_ratio, tf_epochs_decay), display = False)    
+    log_object.text(model.__dict__, display = False)
+    log_object.text("", display = False)
         
     print("Working in folder [{}]".format(model_store_path))
     
@@ -171,10 +172,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         extra_variables = model.load_checkpoint(model_store_path, extension="last")                
         load_optimizer_checkpoint(optimizer, model.cuda, model_store_path, extension="last")
         if "epoch" in extra_variables:
-            current_epoch = extra_variables["epoch"]                
-        text="Resuming training from epoch {}".format(current_epoch)
-        print(text)
-        log_object.text(text)        
+            current_epoch = extra_variables["epoch"]                        
+        log_object.text("Resuming training from epoch {}".format(current_epoch))        
     
     while current_patience > 0 and current_epoch < max_epochs:        
         print("_"*120+"\n")             
@@ -187,10 +186,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             else: 
                 tf_ratio = tf_end_ratio        
         
-        text = "Starting epoch {}: current_patience={}, tf_ratio={:.4f} ".format(current_epoch, current_patience, tf_ratio) 
-        print(text)
-        log_object.text()
-        log_object.text(text)
+        log_object.text("", display=False)
+        log_object.text("Starting epoch {}: current_patience={}, tf_ratio={:.4f} ".format(current_epoch, current_patience, tf_ratio))
         
         # train
         model.train()
@@ -231,7 +228,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         #gc.collect()
         
         
-        log_object.text("\ttraining_loss={}".format(log_average_loss))
+        log_object.text("\ttraining_loss={}".format(log_average_loss), display=False)
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
         
 
@@ -270,26 +267,25 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 t.set_postfix(loss=log_average_loss) 
                 
                   
-            log_object.text("\tvalidation_loss={}".format(log_average_loss))
+            log_object.text("\tvalidation_loss={}".format(log_average_loss), display=False)
             log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=1)
             
             score = 0.
-            if current_epoch%5000==0:                
-                score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
+            if True: #current_epoch%5==0:
+                #score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
+                score, eval = evaluate(y_gold, y_predicted, tgt_i2w, cut_at_eos=True, use_accuracy=False, use_bleu=False)            
                 #score = 0
                 #eval = {}
                 #eval["meteor"], eval["rouge_l_f"] = 0, 0
                 log_object.var("Average Scores|Dev scores|Test scores", current_epoch, score, y_index=0)            
                 #log_object.var("Average Scores|Dev scores|Test scores", current_epoch, 0, y_index=1) # move to test loader
+                log_object.var("Sequence Accuracy Scores|Dev scores|Test scores", current_epoch, eval["sar"], y_index=0)            
                 
-                text = "\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score)
-                print(text)
-                log_object.text(text)
+                log_object.text("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f} , SAR={:.4f}, average={:.4f}".format(eval["meteor"], eval["rouge_l_f"], eval["sar"], score))
+                score = eval["sar"]
            
-            if score > best_accuracy:
-                text = "\tBest score = {:.4f}".format(score)
-                print(text)
-                log_object.text(text)
+            if score > best_accuracy:                   
+                log_object.text("\tBest score = {:.4f}".format(score))
                 best_accuracy = score
                 #model.save_checkpoint(model_store_path, extension="best", extra={"epoch":current_epoch})
                 #save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
@@ -345,14 +341,11 @@ if __name__ == "__main__":
         
     # DATA PREPARATION ######################################################
     print("Loading data ...")    
-    min_seq_len_X = 20
+    """min_seq_len_X = 20
     max_seq_len_X = 50
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
 
-    #from data.roen.loader import loader
-    #data_folder = os.path.join("..", "..", "data", "roen", "ready", "setimes.8K.bpe")
-    #from data.fren.loader import loader
     from models.dy.loader import loader
     data_folder = os.path.join("..", "..", "data", "fren", "ready")
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, -1, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
@@ -362,15 +355,32 @@ if __name__ == "__main__":
         len(valid_loader.X),
         len(test_loader.X),
         len(src_i2w), len(tgt_i2w)))
-
-    #train_loader.dataset.X = train_loader.dataset.X[0:800]
-    #train_loader.dataset.y = train_loader.dataset.y[0:800]
-    #valid_loader.dataset.X = valid_loader.dataset.X[0:100]
-    #valid_loader.dataset.y = valid_loader.dataset.y[0:100]
+    """
+    min_seq_len_X = 1
+    max_seq_len_X = 6
+    min_seq_len_y = min_seq_len_X
+    max_seq_len_y = max_seq_len_X
+    from models.dy.loader import loader
+    data_folder = os.path.join("..", "..", "data", "cmudict", "ready")
+    src_w2i = "X_word2index.json"
+    src_i2w = "X_index2word.json"
+    tgt_w2i = "y_word2index.json"
+    tgt_i2w = "y_index2word.json"
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, -1, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    
+    print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
+        len(train_loader.X),
+        len(valid_loader.X),
+        len(test_loader.X),
+        len(src_i2w), len(tgt_i2w)))
+    
+    
+    
+    
     # ######################################################################
     
     # MODEL TRAINING #######################################################
-    
+    """
     network = EncoderDecoder(dy.Model(), 
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=256,
@@ -384,6 +394,21 @@ if __name__ == "__main__":
                 dec_vocab_size=len(tgt_w2i),
                 dec_lstm_dropout=0.33,
                 dec_dropout=0.33,
+                attention_type = "additive")
+    """
+    network = EncoderDecoder(dy.Model(), 
+                enc_vocab_size=len(src_w2i),
+                enc_emb_dim=100,
+                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.1,
+                enc_lstm_dropout=0.1, 
+                dec_emb_dim=100,
+                dec_hidden_dim=100,
+                dec_num_layers=2,
+                dec_vocab_size=len(tgt_w2i),
+                dec_lstm_dropout=0.1,
+                dec_dropout=0.1,
                 attention_type = "additive")
     
     print("_"*80+"\n")
@@ -409,4 +434,4 @@ if __name__ == "__main__":
           tf_start_ratio=0.9,
           tf_end_ratio=0.1,
           tf_epochs_decay=50, 
-          batch_size = 128)
+          batch_size = 64)
