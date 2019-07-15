@@ -23,7 +23,7 @@ y_word2index = {}
 y_index2word = {}
 
 index = -1
-with open("bpe_models/cmudict.128.bpe.X.vocab","r",encoding="utf8") as f:    
+with open("bpe_models/cmudict.62.bpe.X.vocab","r",encoding="utf8") as f:    
     for line in f:
         index+=1
         word = line.split("\t")[0]
@@ -72,7 +72,7 @@ json.dump(X_index2word, open(os.path.join("ready", "X_index2word.json"),"w",enco
 import random
 import sentencepiece as spm
 sp_en = spm.SentencePieceProcessor()
-sp_en.Load("bpe_models/cmudict.128.bpe.X.model")
+sp_en.Load("bpe_models/cmudict.62.bpe.X.model")
 
 print("Creating train dev and test files ...") 
    
