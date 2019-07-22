@@ -19,25 +19,25 @@ def loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_
         BiDataset(data_folder, "train", src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
-        collate_fn=simple_paired_collate_fn,
+        collate_fn=paired_collate_fn,
         shuffle=True)
 
     valid_loader = torch.utils.data.DataLoader(
         BiDataset(data_folder, "dev", src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
-        collate_fn=simple_paired_collate_fn)
+        collate_fn=paired_collate_fn)
     
     test_loader = torch.utils.data.DataLoader(
         BiDataset(data_folder, "test", src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
-        collate_fn=simple_paired_collate_fn)
+        collate_fn=paired_collate_fn)
             
     return train_loader, valid_loader, test_loader, train_loader.dataset.src_w2i, train_loader.dataset.src_i2w, train_loader.dataset.tgt_w2i, train_loader.dataset.tgt_i2w
     # returns DataLoader, DataLoader, DataLoader, dict, dict
 
-def simple_paired_collate_fn(insts):
+def paired_collate_fn(insts):
     # insts contains a batch_size number of (x, y) elements    
     src_insts, tgt_insts = list(zip(*insts))
     # now src is a batch_size(=64) array of x0 .. x63, and tgt is y0 .. x63 ; xi is variable length
@@ -45,17 +45,30 @@ def simple_paired_collate_fn(insts):
     # then b, c = list(zip(*a)) => b = (1,3,5) and b = (2,4,6)
     
     # src_insts is now a tuple of batch_size Xes (x0, x63) where xi is an instance
-    src_insts = simple_collate_fn(src_insts)  #  64_padded_Xes
-    tgt_insts = simple_collate_fn(tgt_insts)
-    return (src_insts, tgt_insts)    
+    #src_insts, src_lenghts, tgt_insts, tgt_lenghts = length_collate_fn(src_insts, tgt_insts)       
     
-def simple_collate_fn(insts):
-    ''' Pad the instance to the max seq length in batch '''
-    max_len = max(len(inst) for inst in insts) # determines max size for all examples
-    # batch_seq is now a max_len object padded with zeroes to the right (for all instances)
-    return torch.LongTensor( np.array( [ inst + [0] * (max_len - len(inst)) for inst in insts ] ) )
-        
+    src_max_len = max(len(inst) for inst in src_insts) # determines max size for all examples
     
+    src_seq_lengths = torch.tensor(list(map(len, src_insts)), dtype=torch.long)    
+    src_seq_tensor = torch.tensor(np.array( [ inst + [0] * (src_max_len - len(inst)) for inst in src_insts ] ), dtype=torch.long)
+    src_seq_mask = torch.tensor(np.array( [ [1] * len(inst) + [0] * (src_max_len - len(inst)) for inst in src_insts ] ), dtype=torch.long)
+    
+    src_seq_lengths, perm_idx = src_seq_lengths.sort(0, descending=True)
+    src_seq_tensor = src_seq_tensor[perm_idx]   
+    src_seq_mask = src_seq_mask[perm_idx]   
+    
+    tgt_max_len = max(len(inst) for inst in tgt_insts)
+    
+    tgt_seq_lengths = torch.tensor(list(map(len, tgt_insts)), dtype=torch.long)    
+    tgt_seq_tensor = torch.tensor(np.array( [ inst + [0] * (tgt_max_len - len(inst)) for inst in tgt_insts ] ), dtype=torch.long)
+    tgt_seq_mask = torch.tensor(np.array( [ [1] * len(inst) + [0] * (tgt_max_len - len(inst)) for inst in tgt_insts ] ), dtype=torch.long)
+    
+    tgt_seq_lengths = tgt_seq_lengths[perm_idx]
+    tgt_seq_tensor = tgt_seq_tensor[perm_idx]      
+    tgt_seq_mask = tgt_seq_mask[perm_idx]   
+      
+    return ((src_seq_tensor, src_seq_lengths, src_seq_mask), (tgt_seq_tensor, tgt_seq_lengths, tgt_seq_mask))    
+
 class BiDataset(torch.utils.data.Dataset):
     def __init__(self, root_dir, type, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):  
         self.root_dir = root_dir

@@ -34,10 +34,14 @@ class LSTMDecoderWithAttention(LSTMDecoder):
 
         self.to(device)
 
-    def forward(self, input, enc_output, dec_states, teacher_forcing_ratio):
+    def forward(self, x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio):
         """
             See LSTMDecoder for further info.
         """
+        
+        input, input_lengths = y_tuple[0], y_tuple[1]
+        encoder_mask = x_tuple[2]
+        
         batch_size = input.shape[0]
         seq_len_dec = input.shape[1]        
         attention_weights = []
@@ -50,7 +54,7 @@ class LSTMDecoderWithAttention(LSTMDecoder):
         for i in range(0, seq_len_dec-1):
             # Calculate the context vector at step i.
             # context_vector is [batch_size, encoder_size], attention_weights is [batch_size, seq_len, 1]
-            context_vector, step_attention_weights = self.attention(state_h=dec_states[0], enc_output=enc_output)
+            context_vector, step_attention_weights = self.attention(state_h=dec_states[0], enc_output=enc_output, mask=encoder_mask)
             
             # save attention weights incrementally
             attention_weights.append(step_attention_weights.squeeze(2).cpu().tolist())

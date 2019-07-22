@@ -27,7 +27,7 @@ class LSTMEncoder(nn.Module):
 
         self.to(device)
 
-    def forward(self, input):
+    def forward(self, input_tuple):
         """
         Args:
             input (tensor): The input of the encoder. It must be a 2-D tensor of integers. 
@@ -39,11 +39,25 @@ class LSTMEncoder(nn.Module):
                 Output shape:            [batch_size, seq_len_enc, hidden_dim * 2]
                 Hidden/cell state shape: [num_layers*2, batch_size, hidden_dim]
         """
-
+        
+        X, X_lengths = input_tuple[0], input_tuple[1]
+        
         # Creates the embeddings and adds dropout. [batch_size, seq_len] -> [batch_size, seq_len, emb_dim].
-        embeddings = self.dropout(self.embedding(input))
+        embeddings = self.dropout(self.embedding(X))
+        
+        pack_padded_lstm_input = torch.nn.utils.rnn.pack_padded_sequence(embeddings, X_lengths, batch_first=True)
 
-        # Computes the output and the two states of the lstm layer. See function returns docs for details.
-        output, states = self.lstm(embeddings)
+        # now run through LSTM
+        pack_padded_lstm_output, states = self.lstm(pack_padded_lstm_input)
+        
+        # undo the packing operation
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(pack_padded_lstm_output, batch_first=True)        
 
+        #print()
+        #print(output.size())
+        #print(states[0].size())
+        #input("asd")
+               
+        #output, states = self.lstm(embeddings)
+        
         return output, states

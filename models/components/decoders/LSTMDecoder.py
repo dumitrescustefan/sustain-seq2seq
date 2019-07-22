@@ -31,7 +31,7 @@ class LSTMDecoder(nn.Module):
         self.device = device
         self.to(device)
 
-    def forward(self, input, enc_output, dec_states, teacher_forcing_ratio):
+    def forward(self, x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio):
         """
         Args:
              input (tensor): The input of the decoder.

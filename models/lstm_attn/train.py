@@ -2,6 +2,16 @@
 import os, sys
 sys.path.insert(0, '../..')
 
+import torch
+torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+import numpy as np
+np.random.seed(0)
+import random
+random.seed(0)
+
+
 from models.lstm_attn.model import LSTMEncoderDecoderWithAttention
 from models.util.trainer import train, get_freer_gpu
 import torch
@@ -28,7 +38,7 @@ if __name__ == "__main__":
     """
     
     # CMUDICT test
-    batch_size = 128
+    batch_size = 2#5
     min_seq_len_X = 0
     max_seq_len_X = 10000
     min_seq_len_y = min_seq_len_X
@@ -81,17 +91,17 @@ if __name__ == "__main__":
     """
     model = LSTMEncoderDecoderWithAttention(
                 enc_vocab_size=len(src_w2i),
-                enc_emb_dim=500,
-                enc_hidden_dim=1000, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_emb_dim=64,
+                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=2,
-                enc_dropout=0.3,
-                enc_lstm_dropout=0.3,
-                dec_input_dim=1000, 
-                dec_emb_dim=500,
-                dec_hidden_dim=1000,
+                enc_dropout=0.4,
+                enc_lstm_dropout=0.4,
+                dec_input_dim=512, 
+                dec_emb_dim=128,
+                dec_hidden_dim=512,
                 dec_num_layers=2,
-                dec_dropout=0.3,
-                dec_lstm_dropout=0.3,
+                dec_dropout=0.4,
+                dec_lstm_dropout=0.4,
                 dec_vocab_size=len(tgt_w2i),
                 dec_attention_type = "additive",
                 dec_transfer_hidden=True)

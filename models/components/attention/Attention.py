@@ -156,7 +156,7 @@ class Attention(nn.Module):
             # f(q, K) = q^t WK , Luong et al., 2015
             return torch.bmm(self.W(K), Q.transpose(1,2))
 
-    def forward(self, enc_output, state_h):
+    def forward(self, enc_output, state_h, mask=None):
         """
         This function calculates the context vector of the attention layer, given the hidden state and the encoder
         last lstm layer output.
@@ -166,6 +166,8 @@ class Attention(nn.Module):
                 Shape: [num_layers * 1, batch_size, decoder_size].
             enc_output (tensor): The output of the last LSTM encoder layer. 
                 Shape: [batch_size, seq_len, encoder_size].
+            mask (tensor): 1 and 0 as for encoder input
+                Shape: [batch_size, seq_len].
 
         Returns:
             context (tensor): The context vector. Shape: [batch_size, encoder_size]
@@ -184,7 +186,9 @@ class Attention(nn.Module):
         energy = self._energy(K,Q) # [batch_size, seq_len, 1]        
         
         # mask with -inf paddings
-        #scores.masked_fill_(mask == 0, -np.inf)
+        if mask != None:
+            print(mask)
+            energy.masked_fill_(mask == 0, -np.inf)
         
         # transform energy into probability distribution using softmax        
         attention_weights = torch.softmax(energy, dim=1) # [batch_size, seq_len, 1]

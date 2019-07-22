@@ -47,17 +47,28 @@ def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, lo
     log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
 def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
-    X_sample, y_sample = iter(loader).next()
+    (X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask) = iter(loader).next()
     seq_len = min(seq_len,len(X_sample))
     X_sample = X_sample[0:seq_len]
+    X_sample_lenghts = X_sample_lenghts[0:seq_len]
+    X_sample_mask = X_sample_mask[0:seq_len]
+    
     y_sample = y_sample[0:seq_len]
+    y_sample_lenghts = y_sample_lenghts[0:seq_len]
+    y_sample_mask = y_sample_mask[0:seq_len]
+    
     if model.cuda:
         X_sample = X_sample.cuda()
+        X_sample_lenghts = X_sample_lenghts.cuda()
+        X_sample_mask = X_sample_mask.cuda()
         y_sample = y_sample.cuda()
+        y_sample_lenghts = y_sample_lenghts.cuda()
+        y_sample_mask = y_sample_mask.cuda()
+        
     if hasattr(model.decoder.attention, 'reset_coverage'):
         model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
                      
-    y_pred_dev_sample, attention_weights = model.forward(X_sample, y_sample)
+    y_pred_dev_sample, attention_weights = model.forward((X_sample, X_sample_lenghts), (y_sample, y_sample_lenghts))
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
     
     # print examples
@@ -169,11 +180,15 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         model.train()
         total_loss, log_average_loss = 0, 0        
         t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b")
-        for batch_index, (x_batch, y_batch) in enumerate(t):        
+        for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):        
             #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
             if model.cuda:
                 x_batch = x_batch.cuda()
+                x_batch_lenghts = x_batch_lenghts.cuda()
+                x_batch_mask = x_batch_mask.cuda()
                 y_batch = y_batch.cuda()
+                y_batch_lenghts = y_batch_lenghts.cuda()
+                y_batch_mask = y_batch_mask.cuda()
             
             if hasattr(model.decoder.attention, 'reset_coverage'):
                 model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
@@ -181,7 +196,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             optimizer.zero_grad()
             
             # x_batch and y_batch shapes: [bs, padded_sequence]            
-            output, _ = model.forward(x_batch, y_batch, tf_ratio)
+            output, _ = model.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
             # output shape: [bs, padded_sequence, n_class]
             
             """if torch.isnan(output).sum()>0:
@@ -274,15 +289,19 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 y_gold = list()
                 y_predicted = list()
                 
-                for batch_index, (x_batch, y_batch) in enumerate(t):                            
+                for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):                            
                     if model.cuda:
                         x_batch = x_batch.cuda()
+                        x_batch_lenghts = x_batch_lenghts.cuda()
+                        x_batch_mask = x_batch_mask.cuda()
                         y_batch = y_batch.cuda()
+                        y_batch_lenghts = y_batch_lenghts.cuda()
+                        y_batch_mask = y_batch_mask.cuda()
                     
                     if hasattr(model.decoder.attention, 'reset_coverage'):
                         model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
                         
-                    output, batch_attention_weights = model.forward(x_batch, y_batch)
+                    output, batch_attention_weights = model.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask))
                     loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
                     
                     y_predicted_batch = output.argmax(dim=2)
