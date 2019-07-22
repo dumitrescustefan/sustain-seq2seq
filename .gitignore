@@ -2,6 +2,8 @@
 *.json
 *.story
 *.pt
+*.png 
+*.jpg
 
 train/
 train/*

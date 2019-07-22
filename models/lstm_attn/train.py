@@ -81,17 +81,17 @@ if __name__ == "__main__":
     """
     model = LSTMEncoderDecoderWithAttention(
                 enc_vocab_size=len(src_w2i),
-                enc_emb_dim=100,
-                enc_hidden_dim=100, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_emb_dim=500,
+                enc_hidden_dim=1000, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=2,
-                enc_dropout=0.1,
-                enc_lstm_dropout=0.1,
-                dec_input_dim=100, 
-                dec_emb_dim=100,
-                dec_hidden_dim=100,
+                enc_dropout=0.3,
+                enc_lstm_dropout=0.3,
+                dec_input_dim=1000, 
+                dec_emb_dim=500,
+                dec_hidden_dim=1000,
                 dec_num_layers=2,
-                dec_dropout=0.1,
-                dec_lstm_dropout=0.1,
+                dec_dropout=0.3,
+                dec_lstm_dropout=0.3,
                 dec_vocab_size=len(tgt_w2i),
                 dec_attention_type = "additive",
                 dec_transfer_hidden=True)
