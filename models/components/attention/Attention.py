@@ -4,6 +4,7 @@ sys.path.insert(0, '../../..')
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class Attention(nn.Module):
     def __init__(self, encoder_size, decoder_size, device, type="additive"):
@@ -186,9 +187,8 @@ class Attention(nn.Module):
         energy = self._energy(K,Q) # [batch_size, seq_len, 1]        
         
         # mask with -inf paddings
-        if mask != None:
-            print(mask)
-            energy.masked_fill_(mask == 0, -np.inf)
+        if mask is not None:            
+            energy.masked_fill_(mask.unsqueeze(-1) == 0, -np.inf)
         
         # transform energy into probability distribution using softmax        
         attention_weights = torch.softmax(energy, dim=1) # [batch_size, seq_len, 1]
