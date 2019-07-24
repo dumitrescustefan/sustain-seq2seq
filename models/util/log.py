@@ -111,6 +111,7 @@ class Log():
                 plt.figure(figsize=(16,10))
                 plt.tight_layout()
                 plt.title(name + ("" if not last_quarter else " (Last quarter)"))
+                ax = plt.gca()
                 
                 for current_y_index in range(max_y_index+1):                
                     plt_x = []
@@ -124,8 +125,23 @@ class Log():
                         plt_x = plt_x[l-int(l/4):]
                         plt_y = plt_y[l-int(l/4):]
                     plt.plot(plt_x, plt_y, alpha=0.6, label=js[name+"_legend"][current_y_index])
+                    # plot min/max lines
+                    y_max = max(plt_y)
+                    y_min = min(plt_y)
+                    if plt_y[0] != y_max: # plot max if values are higher than the first
+                        x_max = plt_y.index(y_max)
+                        label="Max "+js[name+"_legend"][current_y_index].lower()+" at x={}: {:.4g}".format(x_max, y_max)
+                        plt.plot(x_max,y_max, marker='d', markersize=5, color=ax.get_lines()[-1].get_color())
+                        plt.axhline(y=y_max, color=ax.get_lines()[-1].get_color(), linestyle='--', linewidth = 0.75, zorder = .1, alpha = 0.6, xmin=0.03, xmax = 0.97, label=label)
+                        plt.text(x_max,y_max,"[{:.4g}]".format(y_max), color=ax.get_lines()[-1].get_color(), rotation=45,  ha="center", va="top")
+                        
+                    if plt_y[0] != y_min: # plot max if values are higher than the first
+                        x_min = plt_y.index(y_min)
+                        label="Min "+js[name+"_legend"][current_y_index].lower()+" at x={}: {:.4g}".format(x_min, y_min)
+                        plt.plot(x_min,y_min, marker='d', markersize=5, color=ax.get_lines()[-1].get_color())
+                        plt.axhline(y=y_min, color=ax.get_lines()[-1].get_color(), linestyle='--', linewidth = 0.75, zorder = .1, alpha = 0.6, xmin=0.03, xmax = 0.97, label=label)
+                        plt.text(x_min,y_min,"[{:.4g}]".format(y_min), color=ax.get_lines()[-1].get_color(), rotation=45,  ha="center", va="bottom")
                 
-                ax = plt.gca()
                 ax.grid(which='major', axis='both', linestyle='--')
                 plt.legend(loc='upper left', frameon=False)
                 if last_quarter:
@@ -190,3 +206,11 @@ class Log():
                 result.append("{}{}".format(value, name))
         return ':'.join(result[:granularity])
 
+if __name__ == "__main__":
+    log = Log(".", experiment = "ex", clear=True)
+    
+    for i in range(0,50):
+        log.var("Losses|Train loss|Dev loss", i, (i*50)/(i+31), y_index = 0)
+        log.var("Losses|Train loss|Dev loss", i, 50-i/2, y_index = 1)
+    log.draw()
+    
