@@ -38,7 +38,7 @@ if __name__ == "__main__":
     """
     
     # CMUDICT test
-    batch_size = 2#5
+    batch_size = 128#5
     min_seq_len_X = 0
     max_seq_len_X = 10000
     min_seq_len_y = min_seq_len_X

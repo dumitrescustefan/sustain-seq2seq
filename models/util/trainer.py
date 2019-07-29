@@ -68,7 +68,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     if hasattr(model.decoder.attention, 'reset_coverage'):
         model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
                      
-    y_pred_dev_sample, attention_weights = model.forward((X_sample, X_sample_lenghts), (y_sample, y_sample_lenghts))
+    y_pred_dev_sample, attention_weights = model.forward((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
     
     # print examples
