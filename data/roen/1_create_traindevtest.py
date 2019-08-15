@@ -107,18 +107,17 @@ with open(arg["input_folder"]+"/SETIMES.en-ro.ro", "r", encoding="utf8") as f:
 with open(arg["input_folder"]+"/SETIMES.en-ro.en", "r", encoding="utf8") as f:
     en_lines = f.readlines()
     en_lines = [x.strip() for x in en_lines]
-    
+
 for r, e in zip(ro_lines, en_lines):
-    ri = sp_ro.EncodeAsIds(r)
-    re = sp_en.EncodeAsIds(e)
+    enc_ro = sp_ro.EncodeAsIds(r)
+    enc_en = sp_en.EncodeAsIds(e)
     
     if arg["reverse_x"]:
-        re = re[::-1]
+        enc_en = enc_en[::-1]
 
-    y = [ro_word2index["<BOS>"]] + ri + [ro_word2index["<EOS>"]]
-    x = [ro_word2index["<BOS>"]] + re + [ro_word2index["<EOS>"]]
+    y = [en_word2index["<BOS>"]] + enc_en + [en_word2index["<EOS>"]]
+    x = [ro_word2index["<BOS>"]] + enc_ro + [ro_word2index["<EOS>"]]
 
-    total_len += len(re)
     # select train dev or test
     train_fraction = 1.0 - arg["validation_fraction"] - arg["test_fraction"]
     dev_fraction = 1.0 - arg["test_fraction"]
