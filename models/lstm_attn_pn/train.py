@@ -12,7 +12,7 @@ import random
 random.seed(0)
 
 
-from models.lstm_attn.model import LSTMEncoderDecoderWithAttention
+from models.lstm_attn_pn.model import CustomEncoderDecoder
 from models.util.trainer import train, get_freer_gpu
 import torch
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     """
     
     # CMUDICT test
-    batch_size = 16#5
+    batch_size = 2#5
     min_seq_len_X = 0
     max_seq_len_X = 10
     min_seq_len_y = min_seq_len_X
@@ -72,24 +72,7 @@ if __name__ == "__main__":
     
     # MODEL TRAINING #######################################################
         
-    """model = LSTMEncoderDecoderWithAttention(
-                enc_vocab_size=len(src_w2i),
-                enc_emb_dim=64,
-                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
-                enc_num_layers=1,
-                enc_dropout=0.33,
-                enc_lstm_dropout=0.33,
-                dec_input_dim=256, 
-                dec_emb_dim=256,
-                dec_hidden_dim=256,
-                dec_num_layers=1,
-                dec_dropout=0.33,
-                dec_lstm_dropout=0.33,
-                dec_vocab_size=len(tgt_w2i),
-                dec_attention_type = "additive",
-                dec_transfer_hidden=True)
-    """
-    model = LSTMEncoderDecoderWithAttention(
+    model = CustomEncoderDecoder(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=64,
                 enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
@@ -131,7 +114,7 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm_attn_pn"), 
           resume = False, 
           max_epochs = 400, 
           patience = 25, 
