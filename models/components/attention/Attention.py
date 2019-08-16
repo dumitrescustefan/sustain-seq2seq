@@ -42,14 +42,17 @@ class Attention(nn.Module):
         
         if type == "additive":
             # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
+            self.V = nn.Linear(self.encoder_size, 1, bias=False) 
             self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
             self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
-            self.V = nn.Linear(self.encoder_size, 1, bias=False) 
+            self.b = nn.Parameter(torch.Tensor(self.encoder_size))
+            
         elif type == "coverage": # https://arxiv.org/pdf/1601.04811.pdf
             # f(q, K) = wimp*tanh(W1K + W2q + b) , Bahdanau et al., 2015
+            self.V = nn.Linear(self.encoder_size, 1, bias=False) 
             self.W1 = nn.Linear(self.encoder_size, self.encoder_size, bias=False)
             self.W2 = nn.Linear(self.encoder_size, self.encoder_size, bias=False) # encoder size because q is now K's size, otherwise dec_size to enc_size
-            self.V = nn.Linear(self.encoder_size, 1, bias=False)  
+            self.b = nn.Parameter(torch.Tensor(self.encoder_size))
             
             self.coverage_dim = 10
             self.coverage_input_size = self.coverage_dim + 1 + self.encoder_size + self.encoder_size
@@ -139,10 +142,10 @@ class Attention(nn.Module):
                 energy tensor of size [batch_size, seq_len, 1]
         """
         if self.type == "additive":                        
-            return self.V(torch.tanh(self.W1(K) + self.W2(Q)))
+            return self.V(torch.tanh(self.W1(K) + self.W2(Q) + self.b))
         
         if self.type == "coverage":
-            return self.V(torch.tanh(self.W1(K) + self.W2(Q) + self.W3(self.C)))
+            return self.V(torch.tanh(self.W1(K) + self.W2(Q) + self.W3(self.C) + self.b))
         
         if self.type == "multiplicative" or self.type == "dot":    
             # q^t K means batch matrix multiplying K with q transposed:
