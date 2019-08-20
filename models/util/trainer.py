@@ -49,6 +49,7 @@ def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, lo
 def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
     (X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask) = iter(loader).next()
     seq_len = min(seq_len,len(X_sample))
+    
     X_sample = X_sample[0:seq_len]
     X_sample_lenghts = X_sample_lenghts[0:seq_len]
     X_sample_mask = X_sample_mask[0:seq_len]
@@ -67,8 +68,9 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         
     if hasattr(model.decoder.attention, 'reset_coverage'):
         model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
-                     
-    y_pred_dev_sample, attention_weights = model.forward((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
+    
+    model.eval()   
+    y_pred_dev_sample, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))#model.forward((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
     
     # print examples
@@ -110,7 +112,6 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("-" * 40)
 
 
-#def train(model, epochs, batch_size, lr, n_class, train_loader, valid_loader, test_loader, src_i2w, tgt_i2w, model_path):
 def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
           resume=False, max_epochs=100000, patience=10, optimizer=None, lr_scheduler=None,
           tf_start_ratio=0., tf_end_ratio=0., tf_epochs_decay=0): # teacher forcing parameters
@@ -189,45 +190,13 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                 y_batch = y_batch.cuda()
                 y_batch_lenghts = y_batch_lenghts.cuda()
                 y_batch_mask = y_batch_mask.cuda()
-            
-            if hasattr(model.decoder.attention, 'reset_coverage'):
-                model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
-            
+                                    
             optimizer.zero_grad()
             
-            # x_batch and y_batch shapes: [bs, padded_sequence]            
-            output, _ = model.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
-            # output shape: [bs, padded_sequence, n_class]
+            output, loss, attention_weights = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
             
-            """if torch.isnan(output).sum()>0:
-                print("FOUND NAN in output")
-                print(output)
-                print(loss)
-                sys.exit(1)
-            """ 
-            
-            loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
-            
-            """if torch.isnan(loss).sum()>0:
-                print("FOUND NAN in loss")
-                print(output)
-                print(loss)
-                sys.exit(1)
-            """
-            """iloss = loss.item()
-            
-            # L2 regularization on attention
-            l2_lambda = 0.0001
-            l2_reg = torch.tensor(0.).to(model.device)            
-            for p in model.decoder.attention.parameters():
-            #    loss += l2_lambda*p.pow(2).sum()           
-                 l2_reg += torch.norm(p).item()            
-            #    loss += l2_lambda*(torch.abs(p).sum())
-            iloss_l2 = l2_lambda * l2_reg.item()#loss.item()-iloss            
-            loss += l2_lambda * l2_reg
-            """
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.) # parametrize clip value TODO, also what is a good value? 0.1, 0.5, 1 or 5?            
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)            
             if lr_scheduler is not None:
                 lr_scheduler.step()
             optimizer.step()
@@ -298,11 +267,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                         y_batch_lenghts = y_batch_lenghts.cuda()
                         y_batch_mask = y_batch_mask.cuda()
                     
-                    if hasattr(model.decoder.attention, 'reset_coverage'):
-                        model.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
-                        
-                    output, batch_attention_weights = model.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask))
-                    loss = criterion(output.view(-1, n_class), y_batch.contiguous().flatten())
+                    output, loss, batch_attention_weights = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
+            
                     
                     y_predicted_batch = output.argmax(dim=2)
                     y_gold += y_batch.tolist()

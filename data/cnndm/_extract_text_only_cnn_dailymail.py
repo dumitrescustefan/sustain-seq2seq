@@ -117,3 +117,4 @@ process_tgz(tgz_file, os.path.join("text_only","cnn.txt"), 1000)
 
 tgz_file = "dailymail_stories.tgz"   
 process_tgz(tgz_file, os.path.join("text_only","dm.txt"), 1000)
+

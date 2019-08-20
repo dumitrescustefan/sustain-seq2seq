@@ -58,7 +58,7 @@ class Attention(nn.Module):
             self.coverage_input_size = self.coverage_dim + 1 + self.encoder_size + self.encoder_size
             self.cov_gru = nn.GRU(self.coverage_input_size, self.coverage_dim, batch_first=True)
             self.W3 = nn.Linear(self.coverage_dim, self.encoder_size)
-            
+                               
         elif (type == "multiplicative" or type == "dot"):
             # f(q, K) = q^t K , Luong et al., 2015
             # direct dot product, nothing to declare here
@@ -112,11 +112,10 @@ class Attention(nn.Module):
         return state_h.permute(1, 0, 2)
 
     def reset_coverage(self, batch_size, enc_seq_len):
-        if self.type != "coverage":
-            return
-        self.C = torch.zeros(batch_size, enc_seq_len, self.coverage_dim, device=self.device)
-        self.gru_input = torch.zeros(batch_size, 1, self.coverage_input_size, device=self.device)
-    
+        if self.type == "coverage":
+            self.C = torch.zeros(batch_size, enc_seq_len, self.coverage_dim, device=self.device)
+            self.gru_input = torch.zeros(batch_size, 1, self.coverage_input_size, device=self.device)
+                    
     def _coverage_compute_next_C(self, attention_weights, enc_output, state_h):
         # attention_weights:        [batch_size, seq_len, 1]
         # enc_output :              [batch_size, seq_len, encoder_size]
@@ -144,19 +143,19 @@ class Attention(nn.Module):
         if self.type == "additive":                        
             return self.V(torch.tanh(self.W1(K) + self.W2(Q) + self.b))
         
-        if self.type == "coverage":
+        elif self.type == "coverage":
             return self.V(torch.tanh(self.W1(K) + self.W2(Q) + self.W3(self.C) + self.b))
-        
-        if self.type == "multiplicative" or self.type == "dot":    
+            
+        elif self.type == "multiplicative" or self.type == "dot":    
             # q^t K means batch matrix multiplying K with q transposed:
             # bmm( [batch_size, seq_len, enc_size] , [batch_size, enc_size, 1] ) -> [batch_size, seq_len, 1]            
             return torch.bmm(K, Q.transpose(1,2))
         
-        if self.type == "scaled multiplicative" or self.type == "scaled dot":
+        elif self.type == "scaled multiplicative" or self.type == "scaled dot":
             # same as multiplicative but scaled
             return torch.bmm(K, Q.transpose(1,2))/self.scale
     
-        if self.type == "general" or self.type == "bilinear":
+        elif self.type == "general" or self.type == "bilinear":
             # f(q, K) = q^t WK , Luong et al., 2015
             return torch.bmm(self.W(K), Q.transpose(1,2))
 

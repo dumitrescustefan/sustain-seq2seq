@@ -89,4 +89,4 @@ class LSTMDecoderWithAttention(LSTMDecoder):
             
         # output is a tensor [batch_size, seq_len_dec, n_class]
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
-        return output, attention_weights
+        return output, attention_weights, 0

@@ -73,7 +73,7 @@ class RNNEncoderDecoder(nn.Module):
             pass  # dec_state = (,) # TODO initial zero, trebuie sa incercam
 
         # Calculates the output of the decoder.
-        output, attention_weights = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
+        output, attention_weights, coverage_loss = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
 
         # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
         bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size).to(self.device)
@@ -84,8 +84,27 @@ class RNNEncoderDecoder(nn.Module):
         # dec_seq_len, dec_vocab_size]
         output = torch.cat((bos_tensor, output), dim=1)
 
-        return output, attention_weights
-
+        return output, attention_weights, coverage_loss
+    
+    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 0.001):
+        (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
+        (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
+        
+        if hasattr(self.decoder.attention, 'reset_coverage'):
+                self.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+        
+        output, attention_weights, aux_loss = self.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
+        
+        if criterion is not None:
+            loss = criterion(output.view(-1, self.dec_vocab_size), y_batch.contiguous().flatten())
+        
+            total_loss = loss + aux_loss_weight*aux_loss
+        
+            #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
+        else:
+            total_loss = 0
+        return output, total_loss, attention_weights
+        
     def transfer_hidden_from_encoder_to_decoder(self, enc_states):
         batch_size = enc_states[0].shape[1]
 

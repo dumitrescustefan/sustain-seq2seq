@@ -17,15 +17,25 @@ from models.util.trainer import train, get_freer_gpu
 import torch
 
 if __name__ == "__main__":    
+    """print("asd")
+    a = torch.tensor([0,0,0,1,1,1,0])
+    attn = torch.tensor([1,1,1])
+    src = torch.tensor([1,3,4], dtype=torch.long)
     
+    a = a.scatter_add(0, src, attn)
+    print(a)
+    
+    
+    sys.exit(0)
+    """
     # DATA PREPARATION ######################################################
     print("Loading data ...")
    
     # FR-EN test
     """
-     batch_size = 256
-    min_seq_len_X = 20
-    max_seq_len_X = 50
+    batch_size = 4
+    min_seq_len_X = 5
+    max_seq_len_X = 15
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
     from models.util.loaders.standard import loader
@@ -35,10 +45,10 @@ if __name__ == "__main__":
     tgt_w2i = "en_word2index.json"
     tgt_i2w = "en_index2word.json"
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
-    """
     
+    """
     # CMUDICT test
-    batch_size = 2#5
+    batch_size = 16#5
     min_seq_len_X = 0
     max_seq_len_X = 10
     min_seq_len_y = min_seq_len_X
@@ -50,6 +60,7 @@ if __name__ == "__main__":
     tgt_w2i = "y_word2index.json"
     tgt_i2w = "y_index2word.json"
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -103,8 +114,8 @@ if __name__ == "__main__":
     print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
-    #optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
-    optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=0.9)
     
     lr_scheduler = None
     
