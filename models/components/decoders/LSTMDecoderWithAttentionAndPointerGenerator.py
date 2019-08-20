@@ -124,7 +124,8 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             # first, we must use step_attention_weights to get attention_dist to be [batch_size, n_class]
             attention_dist = torch.zeros(batch_size, self.n_class).to(self.device)
             attention_dist = attention_dist.scatter_add(1, src, step_attention_weights.squeeze(2))
-            #print("Step {}, p_gen is {}, y is {}, generated: {}".format(i, p_gen[0].item(), tgt[0, i].item(), torch.argmax(vocab_logits, dim=2)[0].item()))
+            
+            #print("Step {}, \tp_gen is {:.4f}\t, y is {}, generated: {}".format(i, p_gen[0].item(), tgt[0, i].item(), torch.argmax(vocab_logits, dim=2)[0].item()))
             final_dist = p_gen * vocab_dist + (1-p_gen) * attention_dist
             
             # Adds the current output to the final output. 
@@ -137,7 +138,7 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             # update coverage loss, both are [batch_size, n_class]
             coverage_loss = coverage_loss + torch.sum(torch.min(attention_dist, coverage))/batch_size
             
-        # output is a tensor [batch_size, seq_len_dec, n_class]
+        # output is a tensor [batch_size, seq_len_dec, n_class], log-ged to be prepared for NLLLoss 
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
         # coverage_loss is a scalar tensor
-        return output, attention_weights, 0.#coverage_loss
+        return torch.log(output + 1e-31), attention_weights, coverage_loss

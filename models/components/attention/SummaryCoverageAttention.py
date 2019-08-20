@@ -110,7 +110,6 @@ class Attention(nn.Module):
         
         # transform energy into probability distribution using softmax        
         attention_weights = torch.softmax(energy, dim=1) # [batch_size, seq_len, 1]
-        
            
         # calculate weighted values z (element wise multiplication of energy * values)        
         # attention_weights is [batch_size, seq_len, 1], V is [batch_size, seq_len, encoder_size], z is same as V

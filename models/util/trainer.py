@@ -136,7 +136,8 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
     from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
     #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)    
     #criterion = SmoothedCrossEntropyLoss(label_smoothing=1.) # simple crossentropy, no ignore index set
-    criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
+    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
+    criterion = nn.NLLLoss(ignore_index=0)
     #criterion = SmoothedCrossEntropyLoss(label_smoothing=0.9) # KL divergence
     
     n_class = len(tgt_i2w)

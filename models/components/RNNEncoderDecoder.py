@@ -86,7 +86,7 @@ class RNNEncoderDecoder(nn.Module):
 
         return output, attention_weights, coverage_loss
     
-    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 0.001):
+    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 1.):
         (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
         (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
         
@@ -100,7 +100,7 @@ class RNNEncoderDecoder(nn.Module):
         
             total_loss = loss + aux_loss_weight*aux_loss
         
-            #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
+            print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
         else:
             total_loss = 0
         return output, total_loss, attention_weights

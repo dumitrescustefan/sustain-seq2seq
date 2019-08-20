@@ -47,6 +47,7 @@ if __name__ == "__main__":
     train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
     
     """
+    
     # CMUDICT test
     batch_size = 16#5
     min_seq_len_X = 0
@@ -86,19 +87,19 @@ if __name__ == "__main__":
     model = CustomEncoderDecoder(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=64,
-                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_hidden_dim=256, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=2,
                 enc_dropout=0.4,
                 enc_lstm_dropout=0.4,
-                dec_input_dim=512, 
+                dec_input_dim=256, # same as enc_hidden_dim
                 dec_emb_dim=128,
-                dec_hidden_dim=512,
+                dec_hidden_dim=256,
                 dec_num_layers=2,
                 dec_dropout=0.4,
                 dec_lstm_dropout=0.4,
                 dec_vocab_size=len(tgt_w2i),
                 dec_attention_type = "additive",
-                dec_transfer_hidden=True)
+                dec_transfer_hidden = True)
                 
     print("_"*80+"\n")
     print(model)

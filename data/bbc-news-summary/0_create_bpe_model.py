@@ -2,8 +2,9 @@ import sentencepiece as spm
 import os, json, sys
 
 if not os.path.exists("bpe_models"):
-        os.makedirs("bpe_models")
+    os.makedirs("bpe_models")
 
+os.system("find raw/NewsArticles -name '*.txt' -exec cat {} \; > all.txtn")
 # 2K 
 with open(os.path.join("raw","cmudict-0.7b")) as f:
     content = f.readlines()
