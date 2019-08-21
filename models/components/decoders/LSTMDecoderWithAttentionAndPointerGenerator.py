@@ -111,11 +111,7 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             """
             # context_vector is [batch_size, encoder_size]
             # dec_states[-1][1] is [batch_size, decoder_size]
-            # prev_output_embeddings is [batch_size, emb_dim]
-            #print()
-            #print(context_vector.size())
-            #print(dec_states[-1][1].size())
-            #print(prev_output_embeddings.size())
+            # prev_output_embeddings is [batch_size, emb_dim]            
             p_gen_input = torch.cat( (context_vector, dec_states[-1][0], dec_states[-1][1], prev_output_embeddings) , dim = 1)
             p_gen = torch.sigmoid(self.p_gen_linear(p_gen_input)) 
             
@@ -132,11 +128,18 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             #output = torch.cat((output, lin_output), dim=1)            
             output[:,i,:] = final_dist #softmax_output.squeeze(1)
             
-            # for coverage only, calculate the next coverage by adding step_attention_weights where appropriate
-            coverage = coverage.scatter_add(1, src, step_attention_weights.squeeze(2))
-         
+                       
             # update coverage loss, both are [batch_size, n_class]
             coverage_loss = coverage_loss + torch.sum(torch.min(attention_dist, coverage))/batch_size
+                      
+            
+            #print("Step {}, coverage:  {}, cov_loss {}".format(i, torch.sum(coverage), coverage_loss))
+            #print(torch.sum(coverage-attention_dist))
+            #for q in range(self.n_class):
+            #    print("{} - {}\t min={}".format(coverage[0][q], attention_dist[0][q], torch.min(coverage[0][q], attention_dist[0][q])))
+            
+            # calculate the next coverage by adding step_attention_weights where appropriate                        
+            coverage = coverage.scatter_add(1, src, step_attention_weights.squeeze(2))
             
         # output is a tensor [batch_size, seq_len_dec, n_class], log-ged to be prepared for NLLLoss 
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep

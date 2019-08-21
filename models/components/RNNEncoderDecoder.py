@@ -100,7 +100,7 @@ class RNNEncoderDecoder(nn.Module):
         
             total_loss = loss + aux_loss_weight*aux_loss
         
-            print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
+            #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
         else:
             total_loss = 0
         return output, total_loss, attention_weights
