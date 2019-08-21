@@ -167,16 +167,16 @@ def process_individual_file(content): # content is an array of raw uft-8 strings
         
     return x, y
 
-limit_words = 400     
+limit_words = 200     
 
 # tgz_file1, tgz_file2, dest_folder, size, spm_model
 
-model_name = "cnndm.1K.bpe.model"   
-process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe","bpe_processed",model_name), 1000, os.path.join("bpe","bpe_models", model_name))
+#model_name = "cnndm.1K.bpe.model"   
+#process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe","bpe_processed",model_name), 1000, os.path.join("bpe","bpe_models", model_name))
 
 model_name = "cnndm.8K.bpe.model" 
 process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe","bpe_processed",model_name), 1000, os.path.join("bpe","bpe_models", model_name))
 
-model_name = "cnndm.32K.bpe.model"   
-process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe","bpe_processed",model_name), 1000, os.path.join("bpe","bpe_models", model_name))
+#model_name = "cnndm.32K.bpe.model"   
+#process_tgz("cnn_stories.tgz", "dailymail_stories.tgz", os.path.join("bpe","bpe_processed",model_name), 1000, os.path.join("bpe","bpe_models", model_name))
 

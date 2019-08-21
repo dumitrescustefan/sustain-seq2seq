@@ -2,6 +2,7 @@ import sys
 sys.path.insert(0, '../..')
 
 import os, subprocess, gc, time
+from collections import OrderedDict
 import torch
 import torch.nn as nn
 from models.util.log import Log
@@ -70,7 +71,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
     
     model.eval()   
-    y_pred_dev_sample, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))#model.forward((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
+    y_pred_dev_sample, _, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))#model.forward((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
     y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
     
     # print examples
@@ -180,7 +181,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         # train
         time_start = time.time()
         model.train()
-        total_loss, log_average_loss = 0, 0        
+        total_loss, log_average_loss, total_coverage_loss, log_total_coverage_loss, total_generator_loss, log_total_generator_loss = 0, 0, 0, 0, 0, 0
         t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b")
         for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):        
             #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
@@ -194,7 +195,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                                     
             optimizer.zero_grad()
             
-            output, loss, attention_weights = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
+            output, loss, attention_weights, display_variables = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
             
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)            
@@ -204,13 +205,26 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
              
             total_loss += loss.item()
             log_average_loss = total_loss / (batch_index+1)
-            
+            if "coverage_loss" in display_variables:
+                total_coverage_loss += display_variables["coverage_loss"]
+                log_total_coverage_loss = total_coverage_loss / (batch_index+1)
+                total_generator_loss += display_variables["generator_loss"]
+                log_total_generator_loss = total_generator_loss / (batch_index+1)
+                
             current_scheduler_lr = "-"
             if lr_scheduler is not None:
                 current_scheduler_lr = lr_scheduler.get_lr()[0]
             
-            t.set_postfix(loss=log_average_loss, x_y_len=str(len(x_batch[0]))+"/"+str(len(y_batch[0])) , lr = current_scheduler_lr, cur_loss = loss.item())#, iloss = iloss, iloss_l2 = iloss_l2)             
-            
+             # update progress bar
+            t_display_dict = OrderedDict()
+            if isinstance(display_variables, dict):
+                for key in display_variables:
+                    t_display_dict[key] = display_variables[key]                                 
+            t_display_dict["cur_loss"] = loss.item()
+            t_display_dict["loss"] = log_average_loss            
+            t_display_dict["x_y_len"] = str(len(x_batch[0]))+"/"+str(len(y_batch[0]))
+            t.set_postfix(ordered_dict = t_display_dict)
+                                    
             #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, loss.item(), y_index = 0)
             #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, current_scheduler_lr, y_index = 1)
             #log_object.draw()
@@ -223,8 +237,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, len(x_batch[0])*10, y_index=4)
             log_object.draw()
-            """
-            
+            """            
             del output, x_batch, y_batch, loss #, l2_reg
             #torch.cuda.empty_cache()
             #if model.cuda:                        
@@ -244,6 +257,9 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
         log_object.text("\ttraining_loss={}".format(log_average_loss), display = False)
         log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
+        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_average_loss, y_index=0)                
+        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_total_generator_loss, y_index=1)                
+        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_total_coverage_loss, y_index=2)                
         time_train = time.time() - time_start
 
         # dev        
@@ -268,7 +284,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                         y_batch_lenghts = y_batch_lenghts.cuda()
                         y_batch_mask = y_batch_mask.cuda()
                     
-                    output, loss, batch_attention_weights = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
+                    output, loss, batch_attention_weights, display_variables = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
             
                     
                     y_predicted_batch = output.argmax(dim=2)
@@ -277,9 +293,17 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
                     
                     total_loss += loss.data.item()
                     log_average_loss = total_loss / (batch_index+1)
-                    t.set_postfix(loss=log_average_loss) 
+                    
+                    # update progress bar
+                    t_display_dict = OrderedDict()
+                    t_display_dict["loss"] = log_average_loss
+                    if isinstance(display_variables, dict):
+                        for key in display_variables:
+                            t_display_dict[key] = display_variables[key]                     
+                    t.set_postfix(ordered_dict = t_display_dict)
                     
                     del output, loss
+                    
                     
                 if model.cuda:
                     torch.cuda.empty_cache()

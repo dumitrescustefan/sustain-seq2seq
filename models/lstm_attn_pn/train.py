@@ -34,7 +34,7 @@ if __name__ == "__main__":
    
     batch_size = 8
     min_seq_len_X = 0
-    max_seq_len_X = 1000
+    max_seq_len_X = 500
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X
     from models.util.loaders.standard import loader
@@ -102,13 +102,13 @@ if __name__ == "__main__":
     model = CustomEncoderDecoder(
                 enc_vocab_size=len(src_w2i),
                 enc_emb_dim=300,
-                enc_hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_hidden_dim=1024, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 enc_num_layers=2,
                 enc_dropout=0.4,
                 enc_lstm_dropout=0.4,
                 dec_input_dim=256, # same as enc_hidden_dim
                 dec_emb_dim=300,
-                dec_hidden_dim=512,
+                dec_hidden_dim=256,
                 dec_num_layers=2,
                 dec_dropout=0.4,
                 dec_lstm_dropout=0.4,
@@ -147,7 +147,7 @@ if __name__ == "__main__":
           patience = 25, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
-          tf_start_ratio=0.9,
+          tf_start_ratio=1.0,
           tf_end_ratio=0.1,
           tf_epochs_decay=50)
           
