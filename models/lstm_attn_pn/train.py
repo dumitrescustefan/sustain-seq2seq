@@ -59,7 +59,7 @@ if __name__ == "__main__":
     encoder = Encoder(
                 vocab_size=len(src_lookup),
                 emb_dim=300,
-                hidden_dim=1024, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 num_layers=2,
                 lstm_dropout=0.4,
                 dropout=0.4,

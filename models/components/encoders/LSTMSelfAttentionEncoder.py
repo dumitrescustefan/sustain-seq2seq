@@ -59,4 +59,4 @@ class Encoder(nn.Module):
         
         #output = torch.cat((lstm_output, self_attn), dim = 2)
         
-        return lstm_output, states
+        return return {'output':lstm_output, 'states':states}

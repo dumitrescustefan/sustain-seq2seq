@@ -59,4 +59,4 @@ class Encoder(nn.Module):
         # undo the packing operation
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(pack_padded_lstm_output, batch_first=True)        
         
-        return output, states
+        return {'output':output, 'states':states}

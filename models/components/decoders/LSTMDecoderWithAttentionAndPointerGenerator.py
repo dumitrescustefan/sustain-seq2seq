@@ -143,4 +143,4 @@ class Decoder(nn.Module):
         # output is a tensor [batch_size, seq_len_dec, vocab_size], log-ged to be prepared for NLLLoss 
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
         # coverage_loss is a scalar tensor
-        return torch.log(output + 1e-31), attention_weights, coverage_loss
+        return {'output':torch.log(output + 1e-31), 'attention_weights':attention_weights, 'coverage_loss':coverage_loss}

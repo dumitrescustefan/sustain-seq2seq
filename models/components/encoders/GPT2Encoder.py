@@ -33,4 +33,4 @@ class Encoder(nn.Module):
             last_hidden_states = self.gpt2model(X)[0]
         
         
-        return last_hidden_states, _
+        return {'output':last_hidden_states}

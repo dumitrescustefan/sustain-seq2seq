@@ -35,7 +35,9 @@ class PNEncoderDecoder(EncoderDecoder):
         batch_size = x.shape[0]
         
         # Calculates the output of the encoder
-        enc_output, enc_states = self.encoder.forward(x_tuple)
+        encoder_dict = self.encoder.forward(x_tuple)
+        enc_output = encoder_dict["output"]
+        enc_states = encoder_dict["states"]
         # enc_states is a tuple of size ( h=[enc_num_layers*2, batch_size, enc_hidden_dim/2], c=[same-as-h] )
 
         if self.dec_transfer_hidden == True:
@@ -46,10 +48,13 @@ class PNEncoderDecoder(EncoderDecoder):
             dec_states = ( hidden.zero_(), cell.zero_() )
 
         # Calculates the output of the decoder.
-        output, attention_weights, coverage_loss = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
+        encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
+        output = encoder_dict["output"]
+        attention_weights = encoder_dict["attention_weights"]
+        coverage_loss = encoder_dict["coverage_loss"]
 
         # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
-        bos_tensor = torch.zeros(batch_size, 1, self.dec_vocab_size).to(self.device)
+        bos_tensor = torch.zeros(batch_size, 1, self.decoder.vocab_size).to(self.device)
         # Marks the corresponding BOS position with a probability of 1.
         bos_tensor[:, :, self.tgt_bos_token_id] = 1
         # Concatenates the BOS tensor with the output. [batch_size, dec_seq_len-1, dec_vocab_size] -> [batch_size, dec_seq_len, dec_vocab_size]
@@ -68,8 +73,7 @@ class PNEncoderDecoder(EncoderDecoder):
         output, attention_weights, aux_loss = self.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
         
         if criterion is not None:
-            loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())
-        
+            loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())        
             total_loss = loss + aux_loss_weight*aux_loss
         
             #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
