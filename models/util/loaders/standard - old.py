@@ -1,38 +1,43 @@
 import os, sys, json, random
-sys.path.append("../../..")
-
-from models.util.lookup import Lookup
 import numpy as np
 import torch
 import torch.utils.data
-from functools import partial
 
-def loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):
-    src_pad_id = src_lookup.convert_tokens_to_ids(src_lookup.pad_token)
-    tgt_pad_id = tgt_lookup.convert_tokens_to_ids(tgt_lookup.pad_token)
-    
+PAD = 0
+UNK = 1
+BOS = 2
+EOS = 3
+ 
+PAD_WORD = '<PAD>'
+UNK_WORD = '<UNK>'
+BOS_WORD = '<BOS>'
+EOS_WORD = '<EOS>'
+
+
+def loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):
     train_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "train", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
+        BiDataset(data_folder, "train", src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
-        collate_fn=partial(paired_collate_fn, src_padding_idx = src_pad_id, tgt_padding_idx = tgt_pad_id),
+        collate_fn=paired_collate_fn,
         shuffle=True)
 
     valid_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "dev", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
+        BiDataset(data_folder, "dev", src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
-        collate_fn=partial(paired_collate_fn, src_padding_idx = src_pad_id, tgt_padding_idx = tgt_pad_id))
+        collate_fn=paired_collate_fn)
     
     test_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "test", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
+        BiDataset(data_folder, "test", src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
-        collate_fn=partial(paired_collate_fn, src_padding_idx = src_pad_id, tgt_padding_idx = tgt_pad_id))
+        collate_fn=paired_collate_fn)
             
-    return train_loader, valid_loader, test_loader    
+    return train_loader, valid_loader, test_loader, train_loader.dataset.src_w2i, train_loader.dataset.src_i2w, train_loader.dataset.tgt_w2i, train_loader.dataset.tgt_i2w
+    # returns DataLoader, DataLoader, DataLoader, dict, dict
 
-def paired_collate_fn(insts, src_padding_idx, tgt_padding_idx):
+def paired_collate_fn(insts):
     # insts contains a batch_size number of (x, y) elements    
     src_insts, tgt_insts = list(zip(*insts))
     # now src is a batch_size(=64) array of x0 .. x63, and tgt is y0 .. x63 ; xi is variable length
@@ -45,7 +50,7 @@ def paired_collate_fn(insts, src_padding_idx, tgt_padding_idx):
     src_max_len = max(len(inst) for inst in src_insts) # determines max size for all examples
     
     src_seq_lengths = torch.tensor(list(map(len, src_insts)), dtype=torch.long)    
-    src_seq_tensor = torch.tensor(np.array( [ inst + [src_padding_idx] * (src_max_len - len(inst)) for inst in src_insts ] ), dtype=torch.long)
+    src_seq_tensor = torch.tensor(np.array( [ inst + [0] * (src_max_len - len(inst)) for inst in src_insts ] ), dtype=torch.long)
     src_seq_mask = torch.tensor(np.array( [ [1] * len(inst) + [0] * (src_max_len - len(inst)) for inst in src_insts ] ), dtype=torch.long)
     
     src_seq_lengths, perm_idx = src_seq_lengths.sort(0, descending=True)
@@ -55,7 +60,7 @@ def paired_collate_fn(insts, src_padding_idx, tgt_padding_idx):
     tgt_max_len = max(len(inst) for inst in tgt_insts)
     
     tgt_seq_lengths = torch.tensor(list(map(len, tgt_insts)), dtype=torch.long)    
-    tgt_seq_tensor = torch.tensor(np.array( [ inst + [tgt_padding_idx] * (tgt_max_len - len(inst)) for inst in tgt_insts ] ), dtype=torch.long)
+    tgt_seq_tensor = torch.tensor(np.array( [ inst + [0] * (tgt_max_len - len(inst)) for inst in tgt_insts ] ), dtype=torch.long)
     tgt_seq_mask = torch.tensor(np.array( [ [1] * len(inst) + [0] * (tgt_max_len - len(inst)) for inst in tgt_insts ] ), dtype=torch.long)
     
     tgt_seq_lengths = tgt_seq_lengths[perm_idx]
@@ -106,6 +111,16 @@ class BiDataset(torch.utils.data.Dataset):
             
             assert(len(self.X)==len(self.y))
         
+        if os.path.exists(os.path.join(root_dir,"preprocess_settings.json")):
+            self.conf = json.load(open(os.path.join(root_dir,"preprocess_settings.json")))
+        else:
+            self.conf = None
+        self.src_w2i = json.load(open(os.path.join(root_dir, src_w2i)))
+        self.src_i2w = json.load(open(os.path.join(root_dir, src_i2w)))
+        
+        self.tgt_w2i = json.load(open(os.path.join(root_dir, tgt_w2i)))
+        self.tgt_i2w = json.load(open(os.path.join(root_dir, tgt_i2w)))
+
     def __len__(self):
         return len(self.X)
 

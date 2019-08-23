@@ -4,7 +4,7 @@ sys.path.insert(0, '../../..')
 import torch
 import torch.nn as nn
 
-class LSTMEncoder(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, vocab_size, emb_dim, hidden_dim, num_layers, lstm_dropout, dropout, device):
         """
         Creates an Encoder model.
@@ -18,8 +18,13 @@ class LSTMEncoder(nn.Module):
             dropout (float): Embeddings dropout.
             device : The device to run the model on.
         """
-        assert hidden_dim % 2 == 0, "LSTMEncoder hidden_dim should be even as the LSTM is bidirectional."
-        super(LSTMEncoder, self).__init__()
+        assert hidden_dim % 2 == 0, "Encoder hidden_dim should be even as the LSTM is bidirectional."
+        super().__init__()
+        
+        self.vocab_size = vocab_size
+        self.emb_dim = emb_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers        
 
         self.embedding = nn.Embedding(vocab_size, emb_dim)        
         self.dropout = nn.Dropout(dropout)
@@ -45,6 +50,7 @@ class LSTMEncoder(nn.Module):
         # Creates the embeddings and adds dropout. [batch_size, seq_len] -> [batch_size, seq_len, emb_dim].
         embeddings = self.dropout(self.embedding(X))
         
+        # pack padded sequences
         pack_padded_lstm_input = torch.nn.utils.rnn.pack_padded_sequence(embeddings, X_lengths, batch_first=True)
 
         # now run through LSTM
@@ -52,12 +58,5 @@ class LSTMEncoder(nn.Module):
         
         # undo the packing operation
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(pack_padded_lstm_output, batch_first=True)        
-
-        #print()
-        #print(output.size())
-        #print(states[0].size())
-        #input("asd")
-               
-        #output, states = self.lstm(embeddings)
         
         return output, states

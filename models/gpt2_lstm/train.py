@@ -12,13 +12,12 @@ np.random.seed(0)
 import random
 random.seed(0)
 
+
+from models.gpt2_lstm.model import CustomEncoderDecoder
 from models.util.trainer import train, get_freer_gpu
 from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
-
-from models.lstm_attn_pn.model import PNEncoderDecoder
-from models.components.encoders.LSTMEncoder import Encoder
-from models.components.decoders.LSTMDecoderWithAttentionAndPointerGenerator import Decoder
+import torch
 
 if __name__ == "__main__":    
    
@@ -38,11 +37,49 @@ if __name__ == "__main__":
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
     
+    
+    # FR-EN test
+    """
+    batch_size = 4
+    min_seq_len_X = 5
+    max_seq_len_X = 15
+    min_seq_len_y = min_seq_len_X
+    max_seq_len_y = max_seq_len_X
+    from models.util.loaders.standard import loader
+    data_folder = os.path.join("..", "..", "data", "fren", "ready")
+    src_w2i = "fr_word2index.json"
+    src_i2w = "fr_index2word.json"
+    tgt_w2i = "en_word2index.json"
+    tgt_i2w = "en_index2word.json"
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    
+   
+    
+    # CMUDICT test
+    batch_size = 16#5
+    min_seq_len_X = 0
+    max_seq_len_X = 7 
+    min_seq_len_y = min_seq_len_X
+    max_seq_len_y = max_seq_len_X
+    from models.util.loaders.standard import loader
+    data_folder = os.path.join("..", "..", "data", "cmudict", "ready")
+    src_w2i = "X_word2index.json"
+    src_i2w = "X_index2word.json"
+    tgt_w2i = "y_word2index.json"
+    tgt_i2w = "y_index2word.json"
+    train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    """
+    
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
         len(valid_loader.dataset.X),
         len(test_loader.dataset.X),
         len(src_lookup), len(tgt_lookup)))
+
+    #train_loader.dataset.X = train_loader.dataset.X[0:800]
+    #train_loader.dataset.y = train_loader.dataset.y[0:800]
+    #valid_loader.dataset.X = valid_loader.dataset.X[0:100]
+    #valid_loader.dataset.y = valid_loader.dataset.y[0:100]
     # ######################################################################
     
     # GPU SELECTION ########################################################
@@ -50,31 +87,28 @@ if __name__ == "__main__":
         freer_gpu = get_freer_gpu()
         print("Auto-selected GPU: " + str(freer_gpu))
         torch.cuda.set_device(freer_gpu)
-        device = torch.device('cuda')
-    else:            
-        device = torch.device('cpu')
     # ######################################################################
     
     # MODEL TRAINING #######################################################
-    encoder = Encoder(
-                vocab_size=len(src_lookup),
-                emb_dim=300,
-                hidden_dim=1024, # meaning we will have dim/2 for forward and dim/2 for backward lstm
-                num_layers=2,
-                lstm_dropout=0.4,
-                dropout=0.4,
-                device=device)
-    decoder = Decoder(                
-                emb_dim=300,
-                input_size=512,                 
-                hidden_dim=256,
-                num_layers=2,
-                lstm_dropout=0.4,
-                dropout=0.4,
-                vocab_size=len(tgt_lookup),                
-                device=device)
         
-    model = PNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, device = device)
+    model = CustomEncoderDecoder(
+                src_lookup = src_lookup,
+                tgt_lookup = tgt_lookup,
+                enc_vocab_size=len(src_lookup),
+                enc_emb_dim=300,
+                enc_hidden_dim=1024, # meaning we will have dim/2 for forward and dim/2 for backward lstm
+                enc_num_layers=2,
+                enc_dropout=0.4,
+                enc_lstm_dropout=0.4,
+                dec_input_dim=256, # same as enc_hidden_dim
+                dec_emb_dim=300,
+                dec_hidden_dim=256,
+                dec_num_layers=2,
+                dec_dropout=0.4,
+                dec_lstm_dropout=0.4,
+                dec_vocab_size=len(tgt_lookup),
+                dec_attention_type = "additive",
+                dec_transfer_hidden = False)
                 
     print("_"*80+"\n")
     print(model)

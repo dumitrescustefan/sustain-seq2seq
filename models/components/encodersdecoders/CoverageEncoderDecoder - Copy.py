@@ -1,15 +1,23 @@
-import sys, os
+import os, sys
+
 sys.path.insert(0, '../..')
 
+from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 from collections import OrderedDict
 import torch
 import torch.nn as nn
-from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 
-class PNEncoderDecoder(EncoderDecoder):
-    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden, device):
+class RNNEncoderDecoder(EncoderDecoder):
+    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden=True):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 
+        self.src_lookup = src_lookup
+        self.tgt_lookup = tgt_lookup
+        self.src_bos_token_id = src_lookup.convert_tokens_to_ids(src_lookup.bos_token)
+        self.src_eos_token_id = src_lookup.convert_tokens_to_ids(src_lookup.eos_token)
+        self.tgt_bos_token_id = src_lookup.convert_tokens_to_ids(tgt_lookup.bos_token)
+        self.tgt_eos_token_id = src_lookup.convert_tokens_to_ids(tgt_lookup.eos_token)
+    
         self.dec_transfer_hidden = dec_transfer_hidden
        
         if dec_transfer_hidden == True:
@@ -103,6 +111,3 @@ class PNEncoderDecoder(EncoderDecoder):
 
         return dec_states
 
-
-    
-        

@@ -7,34 +7,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 from models.components.attention.SummaryCoverageAttention import Attention
-from models.components.decoders.LSTMDecoder import LSTMDecoder
 
-
-class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
-    def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, attention_type, device):
-        """
-        Creates a Decoder with attention and Pointer network see https://nlp.stanford.edu/pubs/see2017get.pdf 
-
-        Args :
-            dropout (float): The dropout in the attention layer.
-
-            see LSTMDecoder for further args info
-        """
-
-        super(LSTMDecoderWithAttentionAndPointerGenerator, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
+class Decoder(nn.Module):
+    def __init__(self, emb_dim, input_size, hidden_dim, num_layers, vocab_size, lstm_dropout, dropout, device):
+        """ 
+            Creates a Decoder with attention and Pointer network see https://nlp.stanford.edu/pubs/see2017get.pdf 
+        """        
+        super().__init__()
+        
+        self.device = device
         
         self.emb_dim = emb_dim
-        self.n_class = n_class
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
+        self.vocab_size = vocab_size
         self.encoder_size = input_size
         self.decoder_size = hidden_dim
         
-        self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, vocab_size=n_class, device=device, type=attention_type)
+        self.embedding = nn.Embedding(vocab_size, emb_dim)
+        self.dropout = nn.Dropout(dropout)
+        self.lstm = nn.LSTM(emb_dim + input_size, hidden_dim, num_layers, dropout=lstm_dropout, batch_first=True)
+        self.output_linear = nn.Linear(hidden_dim, vocab_size)
+        self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, vocab_size=vocab_size, device=device)
 
         # overwrite output to allow context from the attention to be added to the output layer
         self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, int((hidden_dim+input_size+emb_dim)/2))
-        self.vocab_linear = nn.Linear(int((hidden_dim+input_size+emb_dim)/2), n_class)
+        self.vocab_linear = nn.Linear(int((hidden_dim+input_size+emb_dim)/2), vocab_size)
 
         # p_gen parameters
         """
@@ -59,9 +58,9 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
         attention_weights = []
         
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
-        output = torch.zeros(batch_size,seq_len_dec-1,self.n_class).to(self.device)
+        output = torch.zeros(batch_size,seq_len_dec-1,self.vocab_size).to(self.device)
         #output.requires_grad=False
-        coverage = torch.zeros(batch_size, self.n_class).to(self.device)
+        coverage = torch.zeros(batch_size, self.vocab_size).to(self.device)
         coverage_loss = 0
         
         # Loop over the rest of tokens in the tgt seq_len_dec.
@@ -94,11 +93,11 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             dec_output, dec_states = self.lstm(lstm_input, dec_states)
 
             # Maps the decoder output to the decoder vocab size space. 
-            # [batch_size, 1, hidden_dim + encoder_dim + emb_dim] -> [batch_size, 1, n_class].            
+            # [batch_size, 1, hidden_dim + encoder_dim + emb_dim] -> [batch_size, 1, vocab_size].            
             lin_input = torch.cat( (dec_output, context_vector.unsqueeze(1), prev_output_embeddings.unsqueeze(1)) , dim = 2)
             lin_output = self.output_linear(lin_input) #lin_output = self.output_linear(dec_output)    
             
-            # vocab_dist is the softmaxed dist of the output of the generator, and is [batch_size, n_class]
+            # vocab_dist is the softmaxed dist of the output of the generator, and is [batch_size, vocab_size]
             vocab_logits = self.vocab_linear(torch.tanh(lin_output))
             vocab_dist = torch.softmax(vocab_logits.squeeze(1), dim=1)
             
@@ -115,10 +114,10 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             p_gen_input = torch.cat( (context_vector, dec_states[-1][0], dec_states[-1][1], prev_output_embeddings) , dim = 1)
             p_gen = torch.sigmoid(self.p_gen_linear(p_gen_input)) 
             
-            # Calculate final distribution, final_dist will be [batch_size, n_class]
-            # vocab_dist is [batch_size, n_class], step_attention_weights is [batch_size, src_seq_len, 1], src is [batch_size, src_seq_len] and contains indices
-            # first, we must use step_attention_weights to get attention_dist to be [batch_size, n_class]
-            attention_dist = torch.zeros(batch_size, self.n_class).to(self.device)
+            # Calculate final distribution, final_dist will be [batch_size, vocab_size]
+            # vocab_dist is [batch_size, vocab_size], step_attention_weights is [batch_size, src_seq_len, 1], src is [batch_size, src_seq_len] and contains indices
+            # first, we must use step_attention_weights to get attention_dist to be [batch_size, vocab_size]
+            attention_dist = torch.zeros(batch_size, self.vocab_size).to(self.device)
             attention_dist = attention_dist.scatter_add(1, src, step_attention_weights.squeeze(2))
             
             #print("Step {}, \tp_gen is {:.4f}\t, y is {}, generated: {}".format(i, p_gen[0].item(), tgt[0, i].item(), torch.argmax(vocab_logits, dim=2)[0].item()))
@@ -129,19 +128,19 @@ class LSTMDecoderWithAttentionAndPointerGenerator(LSTMDecoder):
             output[:,i,:] = final_dist #softmax_output.squeeze(1)
             
                        
-            # update coverage loss, both are [batch_size, n_class]
+            # update coverage loss, both are [batch_size, vocab_size]
             coverage_loss = coverage_loss + torch.sum(torch.min(attention_dist, coverage))/batch_size
                       
             
             #print("Step {}, coverage:  {}, cov_loss {}".format(i, torch.sum(coverage), coverage_loss))
             #print(torch.sum(coverage-attention_dist))
-            #for q in range(self.n_class):
+            #for q in range(self.vocab_size):
             #    print("{} - {}\t min={}".format(coverage[0][q], attention_dist[0][q], torch.min(coverage[0][q], attention_dist[0][q])))
             
             # calculate the next coverage by adding step_attention_weights where appropriate                        
             coverage = coverage.scatter_add(1, src, step_attention_weights.squeeze(2))
             
-        # output is a tensor [batch_size, seq_len_dec, n_class], log-ged to be prepared for NLLLoss 
+        # output is a tensor [batch_size, seq_len_dec, vocab_size], log-ged to be prepared for NLLLoss 
         # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
         # coverage_loss is a scalar tensor
         return torch.log(output + 1e-31), attention_weights, coverage_loss

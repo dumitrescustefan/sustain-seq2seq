@@ -6,13 +6,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-
-
 from models.components.attention.Attention import Attention
-from models.components.decoders.LSTMDecoder import LSTMDecoder
+from models.components.decoders.LSTMDecoder import BaseDecoder
 
-
-class LSTMDecoderWithAttention(LSTMDecoder):
+class Decoder(BaseDecoder):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, attention_type, device):
         """
         Creates a Decoder with attention.
@@ -23,7 +20,7 @@ class LSTMDecoderWithAttention(LSTMDecoder):
             see LSTMDecoder for further args info
         """
 
-        super(LSTMDecoderWithAttention, self).__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
+        super().__init__(emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device)
         
         self.n_class = n_class
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, device=device, type=attention_type)

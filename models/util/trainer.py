@@ -10,6 +10,7 @@ from tqdm import tqdm
 import numpy as np
 from models.util.validation_metrics import evaluate
 from models.util.utils import pretty_time
+from models.util.lookup import Lookup
 
 def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
     try:    
@@ -113,8 +114,8 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("-" * 40)
 
 
-def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
-          resume=False, max_epochs=100000, patience=10, optimizer=None, lr_scheduler=None,
+def train(model, train_loader, valid_loader=None, test_loader=None, model_store_path=None,
+          resume=False, max_epochs=100000, patience=10, optimizer=None, criterion=None, lr_scheduler=None,
           tf_start_ratio=0., tf_end_ratio=0., tf_epochs_decay=0): # teacher forcing parameters
     if model_store_path is None: # saves model in the same folder as this script
         model_store_path = os.path.dirname(os.path.realpath(__file__))
@@ -133,15 +134,10 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
         
     print("Working in folder [{}]".format(model_store_path))
     
-    #criterion = nn.CrossEntropyLoss(ignore_index=0)
-    from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
-    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)    
-    #criterion = SmoothedCrossEntropyLoss(label_smoothing=1.) # simple crossentropy, no ignore index set
-    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
-    criterion = nn.NLLLoss(ignore_index=0)
-    #criterion = SmoothedCrossEntropyLoss(label_smoothing=0.9) # KL divergence
+    if not criterion:   
+        criterion = nn.CrossEntropyLoss(ignore_index=model.tgt_lookup.convert_tokens_to_ids(model.tgt_lookup.pad_token))
     
-    n_class = len(tgt_i2w)
+    n_class = len(model.tgt_lookup)
     batch_size = len(train_loader.dataset.X[0])
     current_epoch = 0
     current_patience = patience
@@ -269,7 +265,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             model.eval()
             with torch.no_grad():
                 total_loss = 0
-                _print_examples(model, valid_loader, batch_size, src_i2w, tgt_i2w)
+                _print_examples(model, valid_loader, batch_size, model.src_lookup.i2w, model.tgt_lookup.i2w)
 
                 t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
                 y_gold = list()
@@ -314,8 +310,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             
             score = 0.
             if True: #current_epoch%5==0:
-                #score, eval = evaluate(y_gold[:300], y_predicted[:300], tgt_i2w, use_accuracy=False, use_bleu=False)            
-                score, eval = evaluate(y_gold, y_predicted, tgt_i2w, cut_at_eos=True, use_accuracy=False, use_bleu=False)            
+                score, eval = evaluate(y_gold, y_predicted, model.tgt_lookup.i2w, cut_at_eos=True, use_accuracy=False, use_bleu=False)            
                 #score = 0
                 #eval = {}
                 #eval["meteor"], eval["rouge_l_f"] = 0, 0
@@ -335,7 +330,7 @@ def train(model, src_i2w, tgt_i2w, train_loader, valid_loader=None, test_loader=
             
             # plot attention_weights for the first example of the last batch (does not matter which batch)            
             # batch_attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
-            _plot_attention_weights(x_batch, y_batch, src_i2w, tgt_i2w, batch_attention_weights, current_epoch, log_object)
+            _plot_attention_weights(x_batch, y_batch, model.src_lookup.i2w, model.tgt_lookup.i2w, batch_attention_weights, current_epoch, log_object)
             
             # dev cleanup
             del t, y_predicted_batch, y_gold, y_predicted

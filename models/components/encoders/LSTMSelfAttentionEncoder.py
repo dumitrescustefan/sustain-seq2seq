@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from models.components.attention.MultiHeadAttention import MultiHeadAttention
 
-class LSTMSelfAttentionEncoder(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, vocab_size, emb_dim, hidden_dim, num_layers, lstm_dropout, dropout, device):
         """
         Creates an Encoder model.
@@ -19,15 +19,15 @@ class LSTMSelfAttentionEncoder(nn.Module):
             dropout (float): Embeddings dropout.
             device : The device to run the model on.
         """
-        assert hidden_dim % 2 == 0, "LSTMSelfAttentionEncoder hidden_dim should be even as the LSTM is bidirectional."
-        super(LSTMSelfAttentionEncoder, self).__init__()
+        assert hidden_dim % 2 == 0, "Encoder hidden_dim should be even as the LSTM is bidirectional."
+        super().__init__()
 
         self.embedding = nn.Embedding(vocab_size, emb_dim)        
         self.dropout = nn.Dropout(dropout)
         self.lstm = nn.LSTM(emb_dim, int(hidden_dim/2), num_layers, dropout=lstm_dropout, bidirectional=True, batch_first=True)
         
         num_heads = 8 # TODO parametrize this
-        assert hidden_dim % num_heads == 0, "LSTMSelfAttentionEncoder hidden_dim ({}) should be a multiple of num_heads ({}).".format(hidden_dim, num_heads)        
+        assert hidden_dim % num_heads == 0, "Encoder hidden_dim ({}) should be a multiple of num_heads ({}).".format(hidden_dim, num_heads)        
         
         self.self_attention = MultiHeadAttention(d_model=emb_dim, num_heads=num_heads, dropout=dropout)
         

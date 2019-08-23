@@ -5,7 +5,7 @@ sys.path.insert(0, '../../..')
 import torch.nn as nn
 
 
-class LSTMDecoder(nn.Module):
+class BaseDecoder(nn.Module):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, n_class, lstm_dropout, dropout, device):
         """
         Creates an Decoder with attention.
@@ -21,7 +21,7 @@ class LSTMDecoder(nn.Module):
             device : The device to run the model on.
         """
 
-        super(LSTMDecoder, self).__init__()
+        super().__init__()
 
         self.embedding = nn.Embedding(n_class, emb_dim)
         self.dropout = nn.Dropout(dropout)
