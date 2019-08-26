@@ -14,14 +14,14 @@ class Lookup():
         self.mask_token = None
         
         self.w2i = {}
-        self.i2w = {}
+        self.i2w = []
         
         if type == "gpt2":
             from pytorch_transformers import GPT2Tokenizer 
             self._tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
             for i in range(len(self._tokenizer)):
                 token = self._tokenizer.convert_ids_to_tokens(i)
-                self.i2w[i] = token
+                self.i2w.append(token)
                 self.w2i[token] = i             
             if self._tokenizer._bos_token: # using _xxx_token instead of xxx_token to silence gpt2tokenizer not set errors
                 self.bos_token = self._tokenizer.bos_token
@@ -59,6 +59,8 @@ class Lookup():
             if self.mask_token:
                 additional_tokens['mask_token'] = self.mask_token            
             json.dump(additional_tokens, open(file_prefix+".additional_tokens","w",encoding="utf8"), indent=4, sort_keys=True)
+            self._add_additional_tokens_to_w2i_and_i2w()
+            self._tokenizer.add_special_tokens(additional_tokens) 
             
         if self.type == "bpe":
             additional_tokens = {}
@@ -70,7 +72,8 @@ class Lookup():
             additional_tokens['cls_token'] = self.cls_token
             additional_tokens['mask_token'] = self.mask_token            
             json.dump(additional_tokens, open(file_prefix+".additional_tokens","w",encoding="utf8"), indent=4, sort_keys=True)
-        
+            self._add_additional_tokens_to_w2i_and_i2w()            
+            
     
     def load(self, file_prefix):
         if self.type == "gpt2":
@@ -91,21 +94,19 @@ class Lookup():
                 if 'mask_token' in additional_tokens:
                     self.mask_token = additional_tokens['mask_token']
                 self._add_additional_tokens_to_w2i_and_i2w()
-                self._tokenizer.add_special_tokens(additional_tokens)
+                self._tokenizer.add_special_tokens(additional_tokens)                
                 
         if self.type == "bpe":
             import sentencepiece as spm 
             # step 1, load SentencePieceProcessor
             self._tokenizer = spm.SentencePieceProcessor()
             self._tokenizer.Load(file_prefix+".model")
-            # step 2, create base w2i and i2w
-            index = -1  
+            # step 2, create base w2i and i2w            
             with open(file_prefix+".vocab","r",encoding="utf8") as f:    
-                for line in f:
-                    index+=1
+                for line in f:                    
                     word = line.split("\t")[0]
-                    self.w2i[word] = index
-                    self.i2w[str(index)] = word
+                    self.w2i[word] = len(self.w2i)
+                    self.i2w.append(word)
             # step 3, load additional_tokens, if any, and add to vocabulary
             if os.path.exists(file_prefix+".additional_tokens"):
                 additional_tokens = json.load(open(file_prefix+".additional_tokens","r",encoding="utf8"))
@@ -121,25 +122,25 @@ class Lookup():
     def _add_additional_tokens_to_w2i_and_i2w (self):
         if self.bos_token:
             self.w2i[self.bos_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.bos_token
+            self.i2w.append(self.bos_token)
         if self.eos_token:
             self.w2i[self.eos_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.eos_token
+            self.i2w.append(self.eos_token)
         if self.unk_token:
             self.w2i[self.unk_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.unk_token
+            self.i2w.append(self.unk_token)
         if self.sep_token:
             self.w2i[self.sep_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.sep_token
+            self.i2w.append(self.sep_token)
         if self.pad_token:
             self.w2i[self.pad_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.pad_token
+            self.i2w.append(self.pad_token)
         if self.cls_token:
             self.w2i[self.cls_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.cls_token
+            self.i2w.append(self.cls_token)
         if self.mask_token:
             self.w2i[self.mask_token] = len(self.w2i)
-            self.i2w[str(len(self.i2w))] = self.mask_token            
+            self.i2w.append(self.mask_token)
                 
     def tokenize (self, text):
         """ Converts a string in a sequence of tokens (string)

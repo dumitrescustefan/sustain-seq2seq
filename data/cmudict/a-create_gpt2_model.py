@@ -18,7 +18,7 @@ if not os.path.exists(output_lookup_folder):
 
 # EXTRACT DATA FROM RAW -> TEXT
 
-with open(input_raw_file) as f:
+with open(input_raw_file,"r",encoding="ISO-8859-1") as f:
     content = f.readlines()
 content = [x.strip() for x in content]
 X_text = []
@@ -40,12 +40,12 @@ with open(input_raw_file+".y.txt","w",encoding="utf8") as f:
 
 # CREATE LOOKUPS
 src_lookup = Lookup(type="gpt2")
-src_lookup.pad_token = '<PAD>'
+src_lookup.pad_token = src_lookup.eos_token
 src_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"src"))
 
 
 tgt_lookup = Lookup(type="gpt2")
-tgt_lookup.pad_token = '<PAD>'
+tgt_lookup.pad_token = src_lookup.eos_token
 tgt_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt"))
 
 print("Done.")
@@ -71,8 +71,10 @@ for i in range(len(token_ids)):
 
 token_ids = lookup.encode(text, add_bos_eos_tokens = True)
 print("Encode with bos/eos: {}".format(token_ids))
-recreated_string = lookup.decode(token_ids)
-print("Decode with bos/eos: {}".format(recreated_string))
+
+print("\t to tokens: {}".format(lookup.convert_ids_to_tokens(token_ids))
+#recreated_string = lookup.decode(token_ids)
+#print("Decode with bos/eos: {}".format(recreated_string))
 recreated_string = lookup.decode(token_ids, skip_bos_eos_tokens = True)
 print("Decode w/o  bos/eos: {}".format(recreated_string))
 

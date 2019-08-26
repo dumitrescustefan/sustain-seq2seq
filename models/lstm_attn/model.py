@@ -43,8 +43,8 @@ class RNNEncoderDecoder(EncoderDecoder):
         if self.dec_transfer_hidden == True:
             dec_states = self.transfer_hidden_from_encoder_to_decoder(enc_states)
         else:
-            hidden = Variable(next(self.parameters()).data.new(batch_size, self.dec_hidden_dim * self.dec_num_layers), requires_grad=False)
-            cell = Variable(next(self.parameters()).data.new(batch_size, self.dec_hidden_dim * self.dec_num_layers), requires_grad=False)
+            hidden = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
+            cell = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
             dec_states = ( hidden.zero_(), cell.zero_() )
 
         # Calculates the output of the decoder.        

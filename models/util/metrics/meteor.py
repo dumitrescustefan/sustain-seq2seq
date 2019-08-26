@@ -8,8 +8,10 @@ def meteor_score(y_true, y_pred, i2w, preprocess = str.lower, stemmer = PorterSt
     total_score = 0
 
     for y_true_seq, y_pred_seq in zip(y_true, y_pred):
-        references = [i2w[str(int(index))] for index in y_true_seq]
-        hypothesis = [i2w[str(int(index))] for index in y_pred_seq]
+        #references = [i2w[str(int(index))] for index in y_true_seq]
+        #hypothesis = [i2w[str(int(index))] for index in y_pred_seq]
+        references = [i2w[index] for index in y_true_seq]
+        hypothesis = [i2w[index] for index in y_pred_seq]
 
         references = [" ".join(references)]
         hypothesis = " ".join(hypothesis)

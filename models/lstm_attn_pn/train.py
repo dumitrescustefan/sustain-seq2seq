@@ -35,7 +35,7 @@ if __name__ == "__main__":
     tgt_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","tgt-4096")    
     """
     """ CMU DICT """
-    batch_size = 16
+    batch_size = 64
     min_seq_len_X = 0
     max_seq_len_X = 500
     min_seq_len_y = min_seq_len_X
@@ -72,6 +72,9 @@ if __name__ == "__main__":
     # ######################################################################
     
     # MODEL TRAINING #######################################################
+    
+    aux_loss_weight = 0.1
+    
     encoder = Encoder(
                 vocab_size=len(src_lookup),
                 emb_dim=300,
@@ -90,7 +93,7 @@ if __name__ == "__main__":
                 vocab_size=len(tgt_lookup),                
                 device=device)
         
-    model = PNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, device = device)
+    model = PNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = aux_loss_weight, device = device)
                 
     print("_"*80+"\n")
     print(model)

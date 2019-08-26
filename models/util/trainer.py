@@ -32,13 +32,13 @@ def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, lo
     input_labels = []
     X_list = X[0].cpu().tolist()
     for id in X_list:
-        input_labels.append(src_i2w[str(id)])
+        input_labels.append(src_i2w[int(id)])
     
     # y tgt labels for the first example    
     y_list = y[0].cpu().tolist()
     output_labels = []
     for id in y_list:
-        output_labels.append(tgt_i2w[str(id)])    
+        output_labels.append(tgt_i2w[int(id)])    
     
     # map weights
     data = np.zeros((len(X_list), len(y_list)))
@@ -80,36 +80,40 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("X   :", end='')
         for j in range(len(X_sample[i])):
             #print(str(X_sample[i][j].item()) + " ", end='')        
-            token = str(X_sample[i][j].item())
-            
-            if token not in src_i2w.keys():
-                print(src_i2w['1'] + " ", end='')
+            token = int(X_sample[i][j].item())
+            print(src_i2w[token] + " ", end='')
+            """if token not in src_i2w.keys():
+                print(src_i2w[1] + " ", end='')
             elif token == '3':
-                print(src_i2w['3'], end='')   
+                print(src_i2w[3], end='')   
                 break
             else:
                 print(src_i2w[token] + " ", end='')
-        
+            """
         print("\nY   :", end='')
         for j in range(len(y_sample[i])):
-            token = str(y_sample[i][j].item())
-
+            token = int(y_sample[i][j].item())
+            print(src_i2w[token] + " ", end='')        
+            """
             if token not in tgt_i2w.keys():
-                print(tgt_i2w['1'] + " ", end='')
+                print(tgt_i2w[1] + " ", end='')
             elif token == '3':
-                print(tgt_i2w['3'] + " ", end='')                
+                print(tgt_i2w[3] + " ", end='')                
             else:
                 print(tgt_i2w[token] + " ", end='')
+            """
         print("\nPRED:", end='')
         for j in range(len(y_pred_dev_sample[i])):
-            token = str(y_pred_dev_sample[i][j].item())
-
+            token = int(y_pred_dev_sample[i][j].item())
+            print(src_i2w[token] + " ", end='')
+            """
             if token not in tgt_i2w.keys():
-                print(tgt_i2w['1'] + " ", end='')
+                print(tgt_i2w[1] + " ", end='')
             elif token == '3':
-                print(tgt_i2w['3'] + " ", end='')                
+                print(tgt_i2w[3] + " ", end='')                
             else:
                 print(tgt_i2w[token] + " ", end='')
+            """
         print()
         print("-" * 40)
 
@@ -220,7 +224,8 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             t_display_dict["loss"] = log_average_loss            
             t_display_dict["x_y_len"] = str(len(x_batch[0]))+"/"+str(len(y_batch[0]))
             t.set_postfix(ordered_dict = t_display_dict)
-                                    
+           
+                    
             #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, loss.item(), y_index = 0)
             #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, current_scheduler_lr, y_index = 1)
             #log_object.draw()
@@ -264,7 +269,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             
             model.eval()
             with torch.no_grad():
-                total_loss = 0
+                total_loss = 0                
                 _print_examples(model, valid_loader, batch_size, model.src_lookup.i2w, model.tgt_lookup.i2w)
 
                 t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")

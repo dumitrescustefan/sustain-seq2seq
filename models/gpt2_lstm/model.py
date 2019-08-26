@@ -1,25 +1,71 @@
-import sys
+import sys, os
 sys.path.insert(0, '../..')
 
-from models.components.EncoderDecoder import EncoderDecoder
+from collections import OrderedDict
+import torch
+import torch.nn as nn
+from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
+from torch.autograd import Variable
 
-from models.components.encoders.GPT2Encoder import Encoder
-from models.components.decoders.LSTMDecoderWithAttention import Decoder
+class GPT2LSTMEncoderDecoder(EncoderDecoder):
+    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, device):
+        super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 
-class CustomEncoderDecoder(EncoderDecoder):
-    def __init__(self, src_lookup, tgt_lookup,
-                 # encoder params
-                 enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_lstm_dropout, enc_dropout,
-                 # decoder params
-                 dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_lstm_dropout, dec_dropout, dec_vocab_size, dec_attention_type, dec_transfer_hidden=False):
-             
-        super(CustomEncoderDecoder, self).__init__( src_lookup, tgt_lookup,       
-            # encoder params
-            Encoder, enc_vocab_size, enc_emb_dim, enc_hidden_dim, enc_num_layers, enc_lstm_dropout, enc_dropout,
-            # decoder params
-            Decoder, dec_input_dim, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_vocab_size, dec_lstm_dropout, dec_dropout, dec_attention_type, dec_transfer_hidden)
-        
         self.to(self.device)
 
-    
+    def forward(self, x_tuple, y_tuple, teacher_forcing_ratio=0.):
+        """
+        Args:
+            x (tensor): The input of the decoder. Shape: [batch_size, seq_len_enc].
+            y (tensor): The input of the decoder. Shape: [batch_size, seq_len_dec].
+
+        Returns:
+            The output of the Encoder-Decoder with attention. Shape: [batch_size, seq_len_dec, n_class].
+        """
+        x, x_lenghts, x_mask = x_tuple[0], x_tuple[1], x_tuple[2]
+        y, y_lenghts, y_mask = y_tuple[0], y_tuple[1], y_tuple[2]
+        batch_size = x.shape[0]
         
+        # Calculates the output of the encoder
+        encoder_dict = self.encoder.forward(x_tuple)
+        enc_output = encoder_dict["output"]        
+        
+        hidden = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
+        cell = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
+        dec_states = ( hidden.zero_(), cell.zero_() )
+        
+        # Calculates the output of the decoder.
+        encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
+        output = encoder_dict["output"]
+        attention_weights = encoder_dict["attention_weights"]
+        
+        # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
+        bos_tensor = torch.zeros(batch_size, 1, self.decoder.vocab_size).to(self.device)
+        # Marks the corresponding BOS position with a probability of 1.
+        bos_tensor[:, :, self.tgt_bos_token_id] = 1
+        # Concatenates the BOS tensor with the output. [batch_size, dec_seq_len-1, dec_vocab_size] -> [batch_size, dec_seq_len, dec_vocab_size]
+        
+        output = torch.cat((bos_tensor, output), dim=1)
+
+        return output, attention_weights
+    
+    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 0.5):
+        (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
+        (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
+        
+        if hasattr(self.decoder.attention, 'reset_coverage'):
+                self.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+        
+        output, attention_weights = self.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
+        
+        if criterion is not None:
+            loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())        
+            #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
+        else:
+            total_loss = 0
+            
+        display_variables = OrderedDict()
+        if criterion is not None:
+            display_variables["generator_loss"] = loss.item()            
+        return output, loss, attention_weights, display_variables        
+   

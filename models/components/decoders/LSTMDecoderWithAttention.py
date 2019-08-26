@@ -10,9 +10,14 @@ from models.components.attention.Attention import Attention
 
 class Decoder(nn.Module):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, vocab_size, lstm_dropout, dropout, attention_type, device):
-        super().__init__(emb_dim, input_size, hidden_dim, num_layers, vocab_size, lstm_dropout, dropout, device)
+        super().__init__()
         
+        self.emb_dim = emb_dim
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
+        self.encoder_size = input_size
+        self.decoder_size = hidden_dim
         
         self.embedding = nn.Embedding(vocab_size, emb_dim)
         self.dropout = nn.Dropout(dropout)
@@ -24,6 +29,7 @@ class Decoder(nn.Module):
         self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, int((hidden_dim+input_size+emb_dim)/2))
         self.softmax_linear = nn.Linear(int((hidden_dim+input_size+emb_dim)/2), vocab_size)
 
+        self.device = device
         self.to(device)
 
     def forward(self, x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio):

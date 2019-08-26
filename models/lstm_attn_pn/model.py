@@ -7,9 +7,10 @@ import torch.nn as nn
 from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 
 class PNEncoderDecoder(EncoderDecoder):
-    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden, device):
+    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden, aux_loss_weight, device):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 
+        self.aux_loss_weight = aux_loss_weight
         self.dec_transfer_hidden = dec_transfer_hidden
        
         if dec_transfer_hidden == True:
@@ -43,8 +44,8 @@ class PNEncoderDecoder(EncoderDecoder):
         if self.dec_transfer_hidden == True:
             dec_states = self.transfer_hidden_from_encoder_to_decoder(enc_states)
         else:
-            hidden = Variable(next(self.parameters()).data.new(batch_size, self.dec_hidden_dim * self.dec_num_layers), requires_grad=False)
-            cell = Variable(next(self.parameters()).data.new(batch_size, self.dec_hidden_dim * self.dec_num_layers), requires_grad=False)
+            hidden = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
+            cell = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
             dec_states = ( hidden.zero_(), cell.zero_() )
 
         # Calculates the output of the decoder.
@@ -63,7 +64,7 @@ class PNEncoderDecoder(EncoderDecoder):
 
         return output, attention_weights, coverage_loss
     
-    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 0.5):
+    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0):
         (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
         (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
         
@@ -74,7 +75,7 @@ class PNEncoderDecoder(EncoderDecoder):
         
         if criterion is not None:
             loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())        
-            total_loss = loss + aux_loss_weight*aux_loss
+            total_loss = loss + self.aux_loss_weight*aux_loss
         
             #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
         else:
@@ -83,7 +84,7 @@ class PNEncoderDecoder(EncoderDecoder):
         display_variables = OrderedDict()
         if criterion is not None:
             display_variables["generator_loss"] = loss.item()
-            display_variables["coverage_loss"] = aux_loss_weight*aux_loss.item()
+            display_variables["coverage_loss"] = self.aux_loss_weight*aux_loss.item()
         return output, total_loss, attention_weights, display_variables
         
     def transfer_hidden_from_encoder_to_decoder(self, enc_states):

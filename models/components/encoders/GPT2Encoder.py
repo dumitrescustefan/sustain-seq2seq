@@ -6,11 +6,11 @@ import torch.nn as nn
 from pytorch_transformers import GPT2Model
 
 class Encoder(nn.Module):
-    def __init__(self, device):       
+    def __init__(self, vocab_size, device):       
         super().__init__()
         
         self.gpt2model = GPT2Model.from_pretrained('gpt2')
-
+        self.gpt2model.resize_token_embeddings(vocab_size)
         self.to(device)
 
     def forward(self, input_tuple):
@@ -30,7 +30,10 @@ class Encoder(nn.Module):
         
         self.gpt2model.eval()        
         with torch.no_grad():
+            print() 
+            print(X.size())
             last_hidden_states = self.gpt2model(X)[0]
-        
+            print(last_hidden_states.size())
+            
         
         return {'output':last_hidden_states}

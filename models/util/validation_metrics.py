@@ -68,7 +68,7 @@ def evaluate(y_true, y_pred, i2w, cut_at_eos=False, use_accuracy=True, use_bleu=
 if __name__ == "__main__":
     y_true = torch.Tensor([[2, 3, 5, 5], [5, 3, 1, 2]])
     y_pred = torch.Tensor([[2, 3, 5, 5], [5, 2, 1, 2]])
-    i2w = {'2': "uuu", '3': "da", '5': "baba", '1':"cc"}
+    #i2w = {'2': "uuu", '3': "da", '5': "baba", '1':"cc"} it is a list!!
 
     print(accuracy_score(y_true, y_pred))
     print(bleu_score(y_true, y_pred, i2w))
