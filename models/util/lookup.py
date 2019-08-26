@@ -91,6 +91,7 @@ class Lookup():
                 if 'mask_token' in additional_tokens:
                     self.mask_token = additional_tokens['mask_token']
                 self._add_additional_tokens_to_w2i_and_i2w()
+                self._tokenizer.add_special_tokens(additional_tokens)
                 
         if self.type == "bpe":
             import sentencepiece as spm 
@@ -115,8 +116,7 @@ class Lookup():
                 self.pad_token = additional_tokens['pad_token']
                 self.cls_token = additional_tokens['cls_token']
                 self.mask_token = additional_tokens['mask_token']
-                self._add_additional_tokens_to_w2i_and_i2w()
-              
+                self._add_additional_tokens_to_w2i_and_i2w()                
                 
     def _add_additional_tokens_to_w2i_and_i2w (self):
         if self.bos_token:
@@ -186,19 +186,20 @@ class Lookup():
         tokens = self.tokenize(text)
         if add_bos_eos_tokens:
             if not self.bos_token or not self.eos_token:
-                raise Exception("Lookup encode error: {} model does not have BOS or EOS tokens set!")
-            tokens = [self.bos_token] + tokens + [self.eos_token]
-        return self.convert_tokens_to_ids(tokens)
+                raise Exception("Lookup encode error: {} model does not have BOS or EOS tokens set!")            
+            return [self.w2i[self.bos_token]] + self.convert_tokens_to_ids(tokens) + [self.w2i[self.eos_token]]
+        else:
+            return self.convert_tokens_to_ids(tokens)
         
-    def decode (self, token_ids, skip_bos_eos_tokens=False):
-        tokens = self.convert_ids_to_tokens(token_ids)
-        if skip_bos_eos_tokens:
-            if not self.bos_token or not self.eos_token:
-                raise Exception("Lookup encode error: {} model does not have BOS or EOS tokens set!")
-            if tokens[0] == self.bos_token:
-                tokens = tokens[1:]
-            if tokens[-1] == self.eos_token:
-                tokens = tokens[:-1]
+    def decode (self, token_ids, skip_bos_eos_tokens=False):                
+        if skip_bos_eos_tokens:            
+            if not self.bos_token or not self.eos_token:                
+                raise Exception("Lookup decode error: {} model does not have BOS or EOS tokens set!")                                  
+            if token_ids[0] == self.w2i[self.bos_token]:
+                token_ids = token_ids[1:]
+            if token_ids[-1] == self.w2i[self.eos_token]:
+                token_ids = token_ids[:-1]        
+        tokens = self.convert_ids_to_tokens(token_ids)                
         return self.convert_tokens_to_string(tokens)
     
     def __len__(self):

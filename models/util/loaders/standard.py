@@ -65,7 +65,7 @@ def paired_collate_fn(insts, src_padding_idx, tgt_padding_idx):
     return ((src_seq_tensor, src_seq_lengths, src_seq_mask), (tgt_seq_tensor, tgt_seq_lengths, tgt_seq_mask))    
 
 class BiDataset(torch.utils.data.Dataset):
-    def __init__(self, root_dir, type, src_w2i, src_i2w, tgt_w2i, tgt_i2w, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):  
+    def __init__(self, root_dir, type, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y):  
         self.root_dir = root_dir
 
         self.X = []
