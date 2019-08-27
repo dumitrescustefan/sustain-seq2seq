@@ -22,7 +22,7 @@ def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_
         print("Warning: Could execute 'nvidia-smi', default GPU selection is id=0")
         return 0
 
-def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, log_object):
+def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epoch, log_object):
     # plot attention weights for the first example of the batch; USE ONLY FOR DEV where len(predicted_y)=len(gold_y)
     # X is a tensor of size [batch_size, x_seq_len] 
     # y is a tensor of size [batch_size, y_seq_len]
@@ -32,13 +32,13 @@ def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, lo
     input_labels = []
     X_list = X[0].cpu().tolist()
     for id in X_list:
-        input_labels.append(src_i2w[int(id)])
+        input_labels.append(src_lookup.convert_ids_to_tokens(int(id)))
     
     # y tgt labels for the first example    
     y_list = y[0].cpu().tolist()
     output_labels = []
     for id in y_list:
-        output_labels.append(tgt_i2w[int(id)])    
+        output_labels.append(tgt_lookup.convert_ids_to_tokens(int(id)))    
     
     # map weights
     data = np.zeros((len(X_list), len(y_list)))
@@ -48,7 +48,7 @@ def _plot_attention_weights(X, y, src_i2w, tgt_i2w, attention_weights, epoch, lo
     
     log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
-def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
+def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup):
     (X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask) = iter(loader).next()
     seq_len = min(seq_len,len(X_sample))
     
@@ -81,7 +81,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         for j in range(len(X_sample[i])):
             #print(str(X_sample[i][j].item()) + " ", end='')        
             token = int(X_sample[i][j].item())
-            print(src_i2w[token] + " ", end='')
+            print(src_lookup.convert_ids_to_tokens(token) + " ", end='')
             """if token not in src_i2w.keys():
                 print(src_i2w[1] + " ", end='')
             elif token == '3':
@@ -93,7 +93,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("\nY   :", end='')
         for j in range(len(y_sample[i])):
             token = int(y_sample[i][j].item())
-            print(src_i2w[token] + " ", end='')        
+            print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')        
             """
             if token not in tgt_i2w.keys():
                 print(tgt_i2w[1] + " ", end='')
@@ -105,7 +105,7 @@ def _print_examples(model, loader, seq_len, src_i2w, tgt_i2w):
         print("\nPRED:", end='')
         for j in range(len(y_pred_dev_sample[i])):
             token = int(y_pred_dev_sample[i][j].item())
-            print(src_i2w[token] + " ", end='')
+            print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')
             """
             if token not in tgt_i2w.keys():
                 print(tgt_i2w[1] + " ", end='')
@@ -243,7 +243,9 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             #torch.cuda.empty_cache()
             #if model.cuda:                        
             #    torch.cuda.synchronize()
-                            
+            
+            break
+            
         del t
         gc.collect()
         
@@ -270,7 +272,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             model.eval()
             with torch.no_grad():
                 total_loss = 0                
-                _print_examples(model, valid_loader, batch_size, model.src_lookup.i2w, model.tgt_lookup.i2w)
+                _print_examples(model, valid_loader, batch_size, model.src_lookup, model.tgt_lookup)
 
                 t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
                 y_gold = list()
@@ -315,7 +317,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             
             score = 0.
             if True: #current_epoch%5==0:
-                score, eval = evaluate(y_gold, y_predicted, model.tgt_lookup.i2w, cut_at_eos=True, use_accuracy=False, use_bleu=False)            
+                score, eval = evaluate(y_gold, y_predicted, model.tgt_lookup, cut_at_eos=True, use_accuracy=False, use_bleu=False)            
                 #score = 0
                 #eval = {}
                 #eval["meteor"], eval["rouge_l_f"] = 0, 0
@@ -335,7 +337,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             
             # plot attention_weights for the first example of the last batch (does not matter which batch)            
             # batch_attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
-            _plot_attention_weights(x_batch, y_batch, model.src_lookup.i2w, model.tgt_lookup.i2w, batch_attention_weights, current_epoch, log_object)
+            _plot_attention_weights(x_batch, y_batch, model.src_lookup, model.tgt_lookup, batch_attention_weights, current_epoch, log_object)
             
             # dev cleanup
             del t, y_predicted_batch, y_gold, y_predicted

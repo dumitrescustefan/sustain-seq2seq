@@ -7,7 +7,7 @@ from itertools import dropwhile
 from models.util.lookup import Lookup
 import torch
 
-""" BPE 
+""" BPE """
 lookup_type = "bpe"
 src_lookup_file_prefix = os.path.join("lookup","bpe","src")+"-256"
 tgt_lookup_file_prefix = os.path.join("lookup","bpe","tgt")+"-256"
@@ -16,7 +16,7 @@ tgt_lookup_file_prefix = os.path.join("lookup","bpe","tgt")+"-256"
 lookup_type = "gpt2"
 src_lookup_file_prefix = os.path.join("lookup","gpt2","src")
 tgt_lookup_file_prefix = os.path.join("lookup","gpt2","tgt")
-
+"""
 
 input_src_file = os.path.join("raw","cmudict-0.7b.X.txt")
 input_tgt_file = os.path.join("raw","cmudict-0.7b.y.txt")

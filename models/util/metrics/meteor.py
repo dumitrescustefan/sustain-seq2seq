@@ -3,15 +3,15 @@ from nltk.corpus import wordnet
 from nltk.translate.meteor_score import meteor_score as nltk_meteor_score
 
 
-def meteor_score(y_true, y_pred, i2w, preprocess = str.lower, stemmer = PorterStemmer(), wordnet=wordnet, alpha=0.9,
+def meteor_score(y_true, y_pred, lookup, preprocess = str.lower, stemmer = PorterStemmer(), wordnet=wordnet, alpha=0.9,
                  beta=3, gamma=0.5):
     total_score = 0
 
     for y_true_seq, y_pred_seq in zip(y_true, y_pred):
         #references = [i2w[str(int(index))] for index in y_true_seq]
         #hypothesis = [i2w[str(int(index))] for index in y_pred_seq]
-        references = [i2w[index] for index in y_true_seq]
-        hypothesis = [i2w[index] for index in y_pred_seq]
+        references = [lookup.convert_ids_to_tokens(index) for index in y_true_seq]
+        hypothesis = [lookup.convert_ids_to_tokens(index)  for index in y_pred_seq]
 
         references = [" ".join(references)]
         hypothesis = " ".join(hypothesis)

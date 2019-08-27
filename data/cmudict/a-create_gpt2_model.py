@@ -40,19 +40,18 @@ with open(input_raw_file+".y.txt","w",encoding="utf8") as f:
 
 # CREATE LOOKUPS
 src_lookup = Lookup(type="gpt2")
-src_lookup.pad_token = src_lookup.eos_token
-src_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"src"))
-
+src_lookup.save_special_tokens(file_prefix = os.path.join(output_lookup_folder,"src"))
 
 tgt_lookup = Lookup(type="gpt2")
-tgt_lookup.pad_token = src_lookup.eos_token
-tgt_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt"))
+tgt_lookup.save_special_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt"))
 
 print("Done.")
 
 # check everything is ok
 lookup = Lookup(type="gpt2")
 lookup.load(file_prefix = os.path.join(output_lookup_folder,"tgt"))
+print(lookup)
+
 text = " ".join(y_text[0]) # X_text[0]
 print("Text: {}".format(text))
 token_ids = lookup.encode(text)
@@ -68,15 +67,13 @@ print("Map i2w:")
 for i in range(len(token_ids)):
     print("\t[{}] = [{}]".format(token_ids[i], lookup.convert_ids_to_tokens(token_ids[i])))
 
-
 token_ids = lookup.encode(text, add_bos_eos_tokens = True)
 print("Encode with bos/eos: {}".format(token_ids))
 
-print("\t to tokens: {}".format(lookup.convert_ids_to_tokens(token_ids))
-#recreated_string = lookup.decode(token_ids)
-#print("Decode with bos/eos: {}".format(recreated_string))
+print("\t to tokens: {}".format(lookup.convert_ids_to_tokens(token_ids)))
+
 recreated_string = lookup.decode(token_ids, skip_bos_eos_tokens = True)
 print("Decode w/o  bos/eos: {}".format(recreated_string))
 
-
+print(lookup)
 

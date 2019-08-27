@@ -24,17 +24,20 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 8
+    batch_size = 64
     min_seq_len_X = 0
-    max_seq_len_X = 500
+    max_seq_len_X = 100
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X    
-    data_folder = os.path.join("..", "..", "data", "fren", "ready", "bpe")
-    src_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","src-4096")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","tgt-4096")
-    src_lookup = Lookup(type="bpe")
+    #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
+    data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "gpt2")
+    src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
+    src_lookup = Lookup(type="gpt2")
     src_lookup.load(src_lookup_prefix)
-    tgt_lookup = Lookup(type="bpe")
+    tgt_lookup = Lookup(type="gpt2")
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
     

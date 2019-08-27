@@ -6,7 +6,7 @@ from models.util.metrics.sar import sequence_accuracy_rate
 import torch
 
 
-def evaluate(y_true, y_pred, i2w, cut_at_eos=False, use_accuracy=True, use_bleu=True, use_meteor=True, use_rogue=True, use_sequence_accuracy_rate=True):
+def evaluate(y_true, y_pred, lookup, cut_at_eos=False, use_accuracy=True, use_bleu=True, use_meteor=True, use_rogue=True, use_sequence_accuracy_rate=True):
     #print("\nEvaluation results:\n")
     if cut_at_eos:
         y_true_eos = []        
@@ -39,19 +39,19 @@ def evaluate(y_true, y_pred, i2w, cut_at_eos=False, use_accuracy=True, use_bleu=
         eval["score"] += accuracy
         count+=1.
     if use_bleu:
-        bleu = bleu_score(y_true, y_pred, i2w)
+        bleu = bleu_score(y_true, y_pred, lookup)
         #print("Bleu score: {0:.4f}".format(bleu))
         eval["bleu"] = bleu
         eval["score"] += bleu
         count+=1.
     if use_meteor:
-        meteor = meteor_score(y_true, y_pred, i2w)
+        meteor = meteor_score(y_true, y_pred, lookup)
         #print("Meteor score: {0:.4f}".format(meteor))
         eval["meteor"] = meteor
         eval["score"] += meteor
         count+=1.
     if use_rogue:
-        rouge_r, rouge_p, rouge_f = rouge_l_score(y_true, y_pred, i2w)
+        rouge_r, rouge_p, rouge_f = rouge_l_score(y_true, y_pred, lookup)
         #print("Rogue-l score: recall-{0:.4f} precision-{0:.4f} f1-{0:.4f}".format(rouge_r, rouge_p, rouge_f))
         eval["rouge_l_r"] = rouge_r
         eval["rouge_l_p"] = rouge_p

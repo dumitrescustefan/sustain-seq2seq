@@ -50,25 +50,13 @@ spm.SentencePieceTrainer.Train('--input='+input_raw_file+'.Xy.txt --model_prefix
 
 # CREATE LOOKUPS
 src_lookup = Lookup(type="bpe")
-src_lookup.bos_token = '<BOS>'
-src_lookup.eos_token = '<EOS>'
-src_lookup.unk_token = '<UNK>'
-src_lookup.sep_token = '<SEP>'
-src_lookup.pad_token = '<PAD>'
-src_lookup.cls_token = '<CLS>'
-src_lookup.mask_token = '<MSK>'
-src_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"src-"+str(input_src_vocab_size)))
-#src_lookup.load(os.path.join(output_lookup_folder,"src-"+str(input_src_vocab_size)))
+src_lookup.load(os.path.join(output_lookup_folder,"src-"+str(input_src_vocab_size)))
+src_lookup.save_special_tokens(file_prefix = os.path.join(output_lookup_folder,"src-"+str(input_src_vocab_size)))
+
 
 tgt_lookup = Lookup(type="bpe")
-tgt_lookup.bos_token = '<BOS>'
-tgt_lookup.eos_token = '<EOS>'
-tgt_lookup.unk_token = '<UNK>'
-tgt_lookup.sep_token = '<SEP>'
-tgt_lookup.pad_token = '<PAD>'
-tgt_lookup.cls_token = '<CLS>'
-tgt_lookup.mask_token = '<MSK>'
-tgt_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt-"+str(input_tgt_vocab_size)))
+tgt_lookup.load(os.path.join(output_lookup_folder,"tgt-"+str(input_tgt_vocab_size)))
+tgt_lookup.save_special_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt-"+str(input_tgt_vocab_size)))
 print("Done.")
 
 # check everything is ok
@@ -97,4 +85,5 @@ print("Encode with bos/eos: {}".format(token_ids))
 recreated_string = lookup.decode(token_ids, skip_bos_eos_tokens = True)
 print("Decode w/o  bos/eos: {}".format(recreated_string))
 
+print(lookup)
 

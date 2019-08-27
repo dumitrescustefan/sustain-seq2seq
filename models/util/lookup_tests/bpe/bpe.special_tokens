@@ -1,0 +1,29 @@
+{
+    "special_id2token": {
+        "1024": "<PAD>",
+        "1025": "<UNK>",
+        "1026": "<BOS>",
+        "1027": "<EOS>",
+        "1028": "<SEP>",
+        "1029": "<CLS>",
+        "1030": "<MASK>"
+    },
+    "special_token2id": {
+        "<BOS>": 1026,
+        "<CLS>": 1029,
+        "<EOS>": 1027,
+        "<MASK>": 1030,
+        "<PAD>": 1024,
+        "<SEP>": 1028,
+        "<UNK>": 1025
+    },
+    "special_token_map": {
+        "bos_token": "<BOS>",
+        "cls_token": "<CLS>",
+        "eos_token": "<EOS>",
+        "mask_token": "<MASK>",
+        "pad_token": "<PAD>",
+        "sep_token": "<SEP>",
+        "unk_token": "<UNK>"
+    }
+}
