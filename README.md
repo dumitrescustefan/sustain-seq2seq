@@ -1,87 +1,25 @@
 # sustain-seq2seq
 
-## Road-map:
+- [ ] Tokenization that covers BPE and GPT2 (from pytorch_transformers) in a single Lookup object. Full tests for this are required as a lot of problems came from mismatched maps and out of range ints in the lookup.
+  
+  Encoding for BPE:
+    X is composed of ints with <EOS> at the end, <PAD>s in rest
+    y is <BOS> ints <EOS> <PAD>s 
+  Encoding for GPT2:
+    X and y are both <|endoftext|> ints <|endoftext|>s in rest (decoder should stop if <|endoftext|> is generated at index>1)
+  
+  
+Models that need to work:
+- [ ] LSTMEncoder + LSTMDecoder with Attention
+- [ ] GPT2Encoder + LSTMDecoder with Attention
+- [ ] LSTMEncoder + LSTMDecoder with Attention, Pointer Generator & Coverage 
+- [ ] GPT2Encoder + LSTMDecoder with Attention, Pointer Generator & Coverage
+- [ ] GPT2Encoder + GPT2Decoder with Pointer Generator & Coverage
 
-- [X] [Deprecated] Refactor models into components
-- [X] Rewrite loaders with VariableLoader, make it compatible with Pytorch dataloader -> not worth it for now.
-- [X] Rewrite training procedure with variable batch size for GPU training (avoid OOM errors) -> tried, not worth it for now.
-- [ ] Pretrained word embeddings -> separate module maybe?
-
-For LSTM Encoder-Decoder:
-
-- [X] [Deprecated] Validate LSTM EncoderDecoder with AdditiveAttention
-- [X] Add validation measures (BLEU, CIDEr, etc)
-- [X] Add logging stuff + visual 
-- [X] Add TeacherForcing & decay, validate it
-- [X] Add label smoothing: done, in components/criteria/SmoothedCrossEntropyLoss.py, implements KLLoss for smoothing<1
-- [X] Validate global additive attention is working (plot heatmap for ro-en task)
-- [ ] Implement attention with several types (class name: Attention) - in progress
-- [X] Encoder with self attention (multihead) 
-- [X] Decoder with self attention (multihead) 
-- [X] Decoder with self attention and multihead to the encoder
-- [X] L2 weight regularization: tried it, not really worth it (in utils/trainer.py)
-- [ ] Add coverage (see NMT coverage), validate it
-- [ ] Implement beam search with length penalty 
-- [ ] Nice and clean run script, that takes strings as input and outputs strings back (i.e full process)
-- [ ] Add temperature in the softmax of the decoder
-
-For Transformer: 
-
-- [ ] Is it actually working ? Take it from there.
-
-Other:
-- [X] add dummy reverse sequence dataset 
-- [ ] Validation measures: input tokenization required? Validate it.
-- [X] Attention: bias is needed for KQV transformations? Answer: guess not
-- [X] Attention: bias is needed for computiation? Answer: Depends on case, mostly not
-- [ ] Attention: mask needed before softmax? Partial answer: will speed up convergence, in the end won't really matter. Still on it.
-- [ ] Transfer hidden=False not working, plus needs testing
-- [ ] AdditiveAttention.py -> reimplement in Attention.py and delete the file
-- [ ] Single loader in models/utils that loads lists of numbers + additional w2i file
-- [ ] Tied embedding weights, investigate it
-- [ ] Optimizer: Learning rate scheduler, superconvergence, warm restart si cyclical LR. Implement scheduler. *Priority*
-
-## Validation scores:
-
-- TODO
-
-## Folder structure:
-
-#### Data folder
-In /data/ there are folders for each separate task. Each folder is self contained and has all the necessary files (including .py) that process that data into tensor files ready for input. It should contain .pt files (PyTorch tensors, split into train/dev/test) as well as source&target word2index/index2word dicts as jsons. 
-
-Each folder should have a single loader.py that when called will offer a ``train, dev, test, src_w2i, src_i2w, tgt_w2i, tgt_i2w`` objects.
-They should be called like: 
-```
-from data.<task>.loader import loader
-
-data_folder = "../../data/<task>/<any_subfolder_with_pt_files>"
-train_loader, valid_loader, test_loader, src_w2i, src_i2w, tgt_w2i, tgt_i2w = loader(data_folder, batch_size, max_seq_len, min_seq_len)
-```
-
-#### Train folder 
-
-This folder will contain training results. Each model is required to create subfolders in it.
-
-#### Models folder
-
-Each subfolder is a different model. Inputs are similar, imported with the ``loader`` function, output is similar to input - int tensors. 
-
-Within each model the structure is:
-```
-/models/
-  <model-eg. transformer>/
-    train.py <- call it to train the model, parameters in the file
-    run.py <- call it to run the model (inference only, with loaing of the model from the train folder)
-    model.py <- this file will contain the main class of the model (e.g. class Transformer(), etc.)
-    <any other file required>
-```
-
-To run one should call:
-```
-from models.<transformer>.model import Transformer
-```
-then do:
-``` 
-output = transformer_object(batched_dataloader_input)
-```
+Other stuff that needs to be done:
+- [ ] Look at validation measures again (BLEU, METEOR, ROUGE)
+- [ ] Implement all attention types (low priority)
+- [ ] Experiment with multihead attention for RNNs
+- [ ] Beamsearch and/or topk/topp as in pytorch_transformers
+- [ ] Check attention masks are working everywhere
+- [ ] Optimizer: Learning rate scheduler, superconvergence, warm restart si cyclical LR. Implement scheduler. Partially done, needs more testing.
