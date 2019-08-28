@@ -17,13 +17,10 @@ if not os.path.exists(output_lookup_folder):
 
 # CREATE LOOKUPS
 src_lookup = Lookup(type="gpt2")
-#src_lookup.bos_token = '<BOS>'
-src_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"src"))
-#src_lookup.load(os.path.join(output_lookup_folder,"src-"+str(input_src_vocab_size)))
+src_lookup.save_special_tokens(file_prefix = os.path.join(output_lookup_folder,"src"))
 
 tgt_lookup = Lookup(type="gpt2")
-#tgt_lookup.bos_token = '<BOS>'
-tgt_lookup.save_additional_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt"))
+tgt_lookup.save_special_tokens(file_prefix = os.path.join(output_lookup_folder,"tgt"))
 
 print("Done.")
 

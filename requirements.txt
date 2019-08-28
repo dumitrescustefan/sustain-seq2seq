@@ -3,5 +3,8 @@ seaborn
 numpy
 matplotlib
 six
-torch>=1.0
+nltk
+sklearn
+torch>=1.2
 torchvision
+pytorch_transformers

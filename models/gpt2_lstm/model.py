@@ -32,7 +32,7 @@ class GPT2LSTMEncoderDecoder(EncoderDecoder):
         
         hidden = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
         cell = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
-        dec_states = ( hidden.zero_(), cell.zero_() )
+        dec_states = ( hidden.zero_().permute(1, 0, 2), cell.zero_().permute(1, 0, 2) )
         
         # Calculates the output of the decoder.
         encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
@@ -54,7 +54,7 @@ class GPT2LSTMEncoderDecoder(EncoderDecoder):
         (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
         
         if hasattr(self.decoder.attention, 'reset_coverage'):
-                self.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+            self.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
         
         output, attention_weights = self.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
         

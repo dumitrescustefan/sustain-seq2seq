@@ -9,7 +9,7 @@ from models.util.log import Log
 from tqdm import tqdm
 import numpy as np
 from models.util.validation_metrics import evaluate
-from models.util.utils import pretty_time
+from models.util.utils import pretty_time, clean_sequences
 from models.util.lookup import Lookup
 
 def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
@@ -48,7 +48,7 @@ def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epo
     
     log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
-def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup):
+def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos_tokens = True):
     (X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask) = iter(loader).next()
     seq_len = min(seq_len,len(X_sample))
     
@@ -72,49 +72,38 @@ def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup):
         model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
     
     model.eval()   
-    y_pred_dev_sample, _, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))#model.forward((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
-    y_pred_dev_sample = torch.argmax(y_pred_dev_sample, dim=2)
+    y_pred_sample, _, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
+    y_pred_sample = torch.argmax(y_pred_sample, dim=2)
     
-    # print examples
+    # print examples    
     for i in range(seq_len):        
         print("X   :", end='')
-        for j in range(len(X_sample[i])):
-            #print(str(X_sample[i][j].item()) + " ", end='')        
-            token = int(X_sample[i][j].item())
-            print(src_lookup.convert_ids_to_tokens(token) + " ", end='')
-            """if token not in src_i2w.keys():
-                print(src_i2w[1] + " ", end='')
-            elif token == '3':
-                print(src_i2w[3], end='')   
-                break
-            else:
-                print(src_i2w[token] + " ", end='')
-            """
-        print("\nY   :", end='')
+        lst = []
+        for j in range(len(X_sample[i])):            
+            lst.append(int(X_sample[i][j].item()))
+        if skip_bos_eos_tokens:
+            lst = clean_sequences([lst], src_lookup)[0]
+        print(src_lookup.decode(lst, skip_bos_eos_tokens))
+            
+        print("Y   :", end='')
+        lst = []
         for j in range(len(y_sample[i])):
-            token = int(y_sample[i][j].item())
-            print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')        
-            """
-            if token not in tgt_i2w.keys():
-                print(tgt_i2w[1] + " ", end='')
-            elif token == '3':
-                print(tgt_i2w[3] + " ", end='')                
-            else:
-                print(tgt_i2w[token] + " ", end='')
-            """
-        print("\nPRED:", end='')
-        for j in range(len(y_pred_dev_sample[i])):
-            token = int(y_pred_dev_sample[i][j].item())
-            print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')
-            """
-            if token not in tgt_i2w.keys():
-                print(tgt_i2w[1] + " ", end='')
-            elif token == '3':
-                print(tgt_i2w[3] + " ", end='')                
-            else:
-                print(tgt_i2w[token] + " ", end='')
-            """
-        print()
+            #token = int(y_sample[i][j].item())
+            lst.append(int(y_sample[i][j].item()))
+            #print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')        
+        if skip_bos_eos_tokens:
+            lst = clean_sequences([lst], tgt_lookup)[0]
+        print(tgt_lookup.decode(lst, skip_bos_eos_tokens))
+        
+        print("PRED:", end='')
+        lst = []
+        for j in range(len(y_pred_sample[i])):
+            #token = int(y_pred_sample[i][j].item())
+            lst.append(int(y_pred_sample[i][j].item()))
+            #print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')
+        if skip_bos_eos_tokens:
+            lst = clean_sequences([lst], tgt_lookup)[0]
+        print(tgt_lookup.decode(lst, skip_bos_eos_tokens))
         print("-" * 40)
 
 
@@ -182,7 +171,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
         time_start = time.time()
         model.train()
         total_loss, log_average_loss, total_coverage_loss, log_total_coverage_loss, total_generator_loss, log_total_generator_loss = 0, 0, 0, 0, 0, 0
-        t = tqdm(train_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b")
+        t = tqdm(train_loader, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b") #ncols=120,
         for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):        
             #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
             if model.cuda:
@@ -238,13 +227,13 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
             log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, len(x_batch[0])*10, y_index=4)
             log_object.draw()
-            """            
+            """             
             del output, x_batch, y_batch, loss #, l2_reg
             #torch.cuda.empty_cache()
             #if model.cuda:                        
             #    torch.cuda.synchronize()
             
-            break
+            #break
             
         del t
         gc.collect()
@@ -274,7 +263,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                 total_loss = 0                
                 _print_examples(model, valid_loader, batch_size, model.src_lookup, model.tgt_lookup)
 
-                t = tqdm(valid_loader, ncols=120, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
+                t = tqdm(valid_loader, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
                 y_gold = list()
                 y_predicted = list()
                 
@@ -287,9 +276,8 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                         y_batch_lenghts = y_batch_lenghts.cuda()
                         y_batch_mask = y_batch_mask.cuda()
                     
-                    output, loss, batch_attention_weights, display_variables = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
+                    output, loss, batch_attention_weights, display_variables = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio=0.)
             
-                    
                     y_predicted_batch = output.argmax(dim=2)
                     y_gold += y_batch.tolist()
                     y_predicted += y_predicted_batch.tolist()                

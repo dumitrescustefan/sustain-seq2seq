@@ -8,8 +8,6 @@ from itertools import dropwhile
 import sentencepiece as spm
     
 input_raw_file = os.path.join("raw","cmudict-0.7b")
-input_src_vocab_size = 62
-input_tgt_vocab_size = input_src_vocab_size
 output_lookup_folder = os.path.join("lookup","gpt2")
 
 # create output folder

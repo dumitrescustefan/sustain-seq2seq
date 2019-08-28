@@ -7,16 +7,19 @@ from itertools import dropwhile
 from models.util.lookup import Lookup
 import torch
 
-""" BPE """
-lookup_type = "bpe"
-src_lookup_file_prefix = os.path.join("lookup","bpe","src")+"-4096"
+if len(sys.argv)!=2:
+    print("param: bpe or gpt2")
+    sys.exit(0)
+
+if sys.argv[1] == "bpe":
+    lookup_type = "bpe"
+    src_lookup_file_prefix = os.path.join("lookup","bpe","src")+"-4096"
 tgt_lookup_file_prefix = os.path.join("lookup","bpe","tgt")+"-4096"
 
-"""
-lookup_type = "gpt2"
-src_lookup_file_prefix = os.path.join("lookup","gpt2","src")
-tgt_lookup_file_prefix = os.path.join("lookup","gpt2","tgt")
-"""
+if sys.argv[1] == "gpt2":
+    lookup_type = "gpt2"
+    src_lookup_file_prefix = os.path.join("lookup","gpt2","src")
+    tgt_lookup_file_prefix = os.path.join("lookup","gpt2","tgt")
 
 input_src_file = os.path.join("raw","JRC-Acquis.en-fr.fr")
 input_tgt_file = os.path.join("raw","JRC-Acquis.en-fr.en")
@@ -74,6 +77,20 @@ for src_line, tgt_line in zip(src_lines, tgt_lines):
     try:    
         src_ids = src_lookup.encode(src_line, add_bos_eos_tokens=True)
         tgt_ids = tgt_lookup.encode(tgt_line, add_bos_eos_tokens=True)    
+        
+        if cnt%10000 == 0:
+            print("\n+++++++SRC:")
+            print(src_line)
+            print(src_ids)
+            print(src_lookup.decode(src_ids))
+            print(src_lookup.decode(src_ids, skip_bos_eos_tokens=True))
+            print("+++++++TGT")
+            print(tgt_line)
+            print(tgt_ids)
+            print(tgt_lookup.decode(tgt_ids))
+            print(tgt_lookup.decode(tgt_ids, skip_bos_eos_tokens=True))
+            print("+++++++\n")
+            
         if len(src_ids) > max_line_tokens_length or len(tgt_ids) > max_line_tokens_length:
             skipped_len += 1
             continue

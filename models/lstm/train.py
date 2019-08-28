@@ -12,9 +12,10 @@ np.random.seed(0)
 import random
 random.seed(0)
 
-from models.util.trainer import train, get_freer_gpu
+from models.util.trainer import train
 from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
+from models.util.utils import select_processing_device
 
 from models.lstm.model import RNNEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
@@ -24,20 +25,20 @@ if __name__ == "__main__":
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 64
+    batch_size = 128
     min_seq_len_X = 0
     max_seq_len_X = 100
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X    
-    #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
-    #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
-    #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
-    data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "gpt2")
-    src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
-    src_lookup = Lookup(type="gpt2")
+    data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
+    src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
+    #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "gpt2")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
+    src_lookup = Lookup(type="bpe")
     src_lookup.load(src_lookup_prefix)
-    tgt_lookup = Lookup(type="gpt2")
+    tgt_lookup = Lookup(type="bpe")
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
     
@@ -49,13 +50,7 @@ if __name__ == "__main__":
     # ######################################################################
     
     # GPU SELECTION ########################################################
-    if torch.cuda.is_available():
-        freer_gpu = get_freer_gpu()
-        print("Auto-selected GPU: " + str(freer_gpu))
-        torch.cuda.set_device(freer_gpu)
-        device = torch.device('cuda')
-    else:            
-        device = torch.device('cpu')
+    device = select_processing_device(verbose = True)
     # ######################################################################
     
     # MODEL TRAINING #######################################################

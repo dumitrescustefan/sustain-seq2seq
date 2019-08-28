@@ -12,9 +12,10 @@ np.random.seed(0)
 import random
 random.seed(0)
 
-from models.util.trainer import train, get_freer_gpu
+from models.util.trainer import train
 from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
+from models.util.utils import select_processing_device
 
 from models.gpt2_lstm.model import GPT2LSTMEncoderDecoder
 from models.components.encoders.GPT2Encoder import Encoder
@@ -24,18 +25,10 @@ if __name__ == "__main__":
    
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    """ FR-EN 
-    batch_size = 8
-    min_seq_len_X = 0
-    max_seq_len_X = 500
-    min_seq_len_y = min_seq_len_X
-    max_seq_len_y = max_seq_len_X    
-    data_folder = os.path.join("..", "..", "data", "fren", "ready", "bpe")
-    src_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","src-4096")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","tgt-4096")    
-    """
+   
+
     """ CMU DICT """
-    batch_size = 2
+    batch_size = 64
     min_seq_len_X = 0
     max_seq_len_X = 500
     min_seq_len_y = min_seq_len_X
@@ -62,13 +55,7 @@ if __name__ == "__main__":
     # ######################################################################
     
     # GPU SELECTION ########################################################
-    if torch.cuda.is_available():
-        freer_gpu = get_freer_gpu()
-        print("Auto-selected GPU: " + str(freer_gpu))
-        torch.cuda.set_device(freer_gpu)
-        device = torch.device('cuda')
-    else:            
-        device = torch.device('cpu')
+    device = select_processing_device(verbose = True)
     # ######################################################################
     
     # MODEL TRAINING #######################################################

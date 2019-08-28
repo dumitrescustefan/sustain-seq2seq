@@ -681,14 +681,14 @@ def rouge_l_score(y_true, y_pred, lookup, alpha=None):
     total_f_score = 0
 
     for y_true_seq, y_pred_seq in zip(y_true, y_pred):
-        #references = [i2w[str(int(index))] for index in y_true_seq]
-        #hypothesis = [i2w[str(int(index))] for index in y_pred_seq]
-        references = [lookup.convert_ids_to_tokens(index)  for index in y_true_seq]
-        hypothesis = [lookup.convert_ids_to_tokens(index)  for index in y_pred_seq]
-
-        references = " ".join(references)
-        hypothesis = " ".join(hypothesis)
-
+        #references = [lookup.convert_ids_to_tokens(index) for index in y_true_seq]
+        #hypothesis = [lookup.convert_ids_to_tokens(index) for index in y_pred_seq]
+        #references = " ".join(references)
+        #hypothesis = " ".join(hypothesis)
+        
+        references = lookup.decode(y_true_seq, skip_bos_eos_tokens = True)
+        hypothesis = lookup.decode(y_pred_seq, skip_bos_eos_tokens = True)
+        
         r_score, p_score, f_score = rouge_l_sentence_level(references, hypothesis, alpha)
         total_r_score += r_score
         total_p_score += p_score

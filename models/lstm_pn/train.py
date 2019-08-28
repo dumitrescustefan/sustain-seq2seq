@@ -12,9 +12,10 @@ np.random.seed(0)
 import random
 random.seed(0)
 
-from models.util.trainer import train, get_freer_gpu
+from models.util.trainer import train
 from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
+from models.util.utils import select_processing_device
 
 from models.lstm_pn.model import PNEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
@@ -62,13 +63,7 @@ if __name__ == "__main__":
     # ######################################################################
     
     # GPU SELECTION ########################################################
-    if torch.cuda.is_available():
-        freer_gpu = get_freer_gpu()
-        print("Auto-selected GPU: " + str(freer_gpu))
-        torch.cuda.set_device(freer_gpu)
-        device = torch.device('cuda')
-    else:            
-        device = torch.device('cpu')
+    device = select_processing_device(verbose = True)
     # ######################################################################
     
     # MODEL TRAINING #######################################################
@@ -125,7 +120,7 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_attn_pn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm_pn"), 
           resume = False, 
           max_epochs = 400, 
           patience = 25, 

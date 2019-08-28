@@ -46,7 +46,7 @@ class PNEncoderDecoder(EncoderDecoder):
         else:
             hidden = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
             cell = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
-            dec_states = ( hidden.zero_(), cell.zero_() )
+            dec_states = ( hidden.zero_().permute(1, 0, 2), cell.zero_().permute(1, 0, 2) )
 
         # Calculates the output of the decoder.
         encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)

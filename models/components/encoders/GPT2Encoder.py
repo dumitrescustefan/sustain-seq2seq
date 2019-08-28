@@ -30,10 +30,10 @@ class Encoder(nn.Module):
         
         self.gpt2model.eval()        
         with torch.no_grad():
-            print() 
-            print(X.size())
-            last_hidden_states = self.gpt2model(X)[0]
-            print(last_hidden_states.size())
+            #print() 
+            #print(X.size())
+            last_hidden_states = self.gpt2model(X)[0]            
+            #print(last_hidden_states.size())
             
         
         return {'output':last_hidden_states}

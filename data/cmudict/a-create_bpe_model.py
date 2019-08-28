@@ -18,17 +18,19 @@ if not os.path.exists(output_lookup_folder):
 
 # EXTRACT DATA FROM RAW -> TEXT
 
-with open(input_raw_file) as f:
+with open(input_raw_file,"r",encoding = "ISO-8859-1") as f:
     content = f.readlines()
 content = [x.strip() for x in content]
 X_text = []
 y_text = []
+Xy_text = []
 for line in content:
     if line.startswith(";;;"):
         continue
     parts = line.split()
     X_text.append(parts[0])
-    X_text.append(" ".join(parts[1:])) # WE APPEND y as well to cover all vocab chars
+    Xy_text.append(parts[0])
+    Xy_text.append(" ".join(parts[1:])) # WE APPEND y as well to cover all vocab chars
     y_text.append(parts[1:])
 
 with open(input_raw_file+".X.txt","w",encoding="utf8") as f:
@@ -40,7 +42,7 @@ with open(input_raw_file+".y.txt","w",encoding="utf8") as f:
         f.write(" ".join(line).strip()+"\n")
     
 with open(input_raw_file+".Xy.txt","w",encoding="utf8") as f:
-    for line in X_text:
+    for line in Xy_text:
         f.write(line.strip()+"\n")
         
 # TRAIN SENTENCEPIECE MODELS
