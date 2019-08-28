@@ -62,7 +62,7 @@ class GPT2LSTMEncoderDecoder(EncoderDecoder):
             loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())        
             #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, aux_loss, aux_loss_weight, aux_loss_weight*aux_loss, total_loss))
         else:
-            total_loss = 0
+            loss = 0
             
         display_variables = OrderedDict()
         if criterion is not None:
