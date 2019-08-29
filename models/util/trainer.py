@@ -51,7 +51,7 @@ def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epo
 def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos_tokens = True):
     (X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask) = iter(loader).next()
     seq_len = min(seq_len,len(X_sample))
-    
+    print("Printing {} examples (batch_size={}):".format(seq_len, len(X_sample)))
     X_sample = X_sample[0:seq_len]
     X_sample_lenghts = X_sample_lenghts[0:seq_len]
     X_sample_mask = X_sample_mask[0:seq_len]

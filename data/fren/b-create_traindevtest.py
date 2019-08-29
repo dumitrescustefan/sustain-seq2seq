@@ -75,7 +75,11 @@ for src_line, tgt_line in zip(src_lines, tgt_lines):
         print("{} / {} ...".format(cnt, len(src_lines)))
         
     try:    
-        src_ids = src_lookup.encode(src_line, add_bos_eos_tokens=True)
+        if sys.argv[1] == "bpe":
+            src_ids = src_lookup.encode(src_line, add_bos_eos_tokens=True)
+        if sys.argv[1] == "gpt2":
+            src_ids = src_lookup.encode(src_line, add_bos_eos_tokens=False)
+        
         tgt_ids = tgt_lookup.encode(tgt_line, add_bos_eos_tokens=True)    
         
         if cnt%10000 == 0:

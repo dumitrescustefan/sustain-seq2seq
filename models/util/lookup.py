@@ -225,12 +225,16 @@ class Lookup():
         if skip_bos_eos_tokens:            
             if not self.bos_token or not self.eos_token:                
                 raise Exception("Lookup decode error: {} model does not have BOS or EOS tokens set!")                                  
-            if token_ids[0] == self.convert_tokens_to_ids(self.bos_token):
-                token_ids = token_ids[1:]
-            if token_ids[-1] == self.convert_tokens_to_ids(self.eos_token):
-                token_ids = token_ids[:-1]        
-        tokens = self.convert_ids_to_tokens(token_ids)                
-        return self.convert_tokens_to_string(tokens)
+            if len(token_ids)>0:
+                if token_ids[0] == self.convert_tokens_to_ids(self.bos_token):
+                    token_ids = token_ids[1:]
+            if len(token_ids)>0:
+                if token_ids[-1] == self.convert_tokens_to_ids(self.eos_token):
+                    token_ids = token_ids[:-1]        
+        if len(token_ids)>0: 
+            tokens = self.convert_ids_to_tokens(token_ids)                
+            return self.convert_tokens_to_string(tokens)
+        return ""
     
     def _PieceToId(self, token): # just for bpe
         if token in self.special_token2id:
