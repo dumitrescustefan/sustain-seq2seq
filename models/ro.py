@@ -1,4 +1,13 @@
 import torch
+torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+import torch.nn as nn
+import numpy as np
+np.random.seed(0)
+import random
+random.seed(0)
+
 import torch.nn.functional as F
 import numpy as np
 from pytorch_transformers import GPT2LMHeadModel, GPT2Tokenizer
@@ -50,16 +59,26 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
     return logits
     
 def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=0, top_p=0.0, device='cpu'):
+    print("Sample")
     context = torch.tensor(context, dtype=torch.long, device=device)
-    context = context.unsqueeze(0).repeat(num_samples, 1)
+    print(context)
+    print(context.size())
+    context = context.unsqueeze(0).repeat(num_samples, 1)    
     generated = context
-    with torch.no_grad():
+    
+    #generated = torch.tensor([[  464,  1664,   468,   257,  4939,  2450, 13593, 37388,   290,  9253, 13], [15496, 11, 616, 3290, 318, 13779]], dtype=torch.long, device=device)
+    
+    print(generated)
+    print(generated.size())
+    print("Generate::::::::::::::")
+    with torch.no_grad():#labels=input_ids
         for _ in trange(length):
-
-            inputs = {'input_ids': generated}
-           
-            outputs = model(**inputs)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet (cached hidden-states)
-            next_token_logits = outputs[0][0, -1, :] / temperature
+            input_ids = generated            
+            labels = input_ids            
+            outputs = model(input_ids, labels=labels)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet (cached hidden-states)
+            print("\noutput size: ")
+            print(outputs[0].size())
+            next_token_logits = outputs[1][0, -1, :] / temperature
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
             next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
             generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
@@ -67,18 +86,20 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
     
     
 while True:
-    raw_text = "The company has a weak policy addressing bribery and corruption."
+    raw_text = "The first law of robotics"
     context_tokens = tokenizer.encode(raw_text)
+    print(context_tokens)
     out = sample_sequence(
         model=model,
         context=context_tokens,
-        length=200,
+        length=5,
         temperature=1.,
         top_k=0,
         top_p=0.9,
         device=torch.device("cpu")
     )
     out = out[0, len(context_tokens):].tolist()
-    text = tokenizer.decode(out, clean_up_tokenization_spaces=True)
+    text = tokenizer.decode(out, clean_up_tokenization_spaces=False)
     print(text)
     print("_"*20)
+    break
