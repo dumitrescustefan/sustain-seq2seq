@@ -8,7 +8,7 @@ from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 from torch.autograd import Variable
 
 
-class GPT2LSTMPNEncoderDecoder(EncoderDecoder):
+class GPT2GPT2PNEncoderDecoder(EncoderDecoder):
     def __init__(self, src_lookup, tgt_lookup, encoder, decoder, aux_loss_weight, device):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 
@@ -33,10 +33,7 @@ class GPT2LSTMPNEncoderDecoder(EncoderDecoder):
         encoder_dict = self.encoder.forward(x_tuple)
         enc_output = encoder_dict["output"]
         
-        hidden = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
-        cell = Variable(next(self.parameters()).data.new(batch_size, self.decoder.num_layers, self.decoder.hidden_dim), requires_grad=False)
-        dec_states = ( hidden.zero_().permute(1, 0, 2), cell.zero_().permute(1, 0, 2) )
-
+        
         # Calculates the output of the decoder.
         encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
         output = encoder_dict["output"]
