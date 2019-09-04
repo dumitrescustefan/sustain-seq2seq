@@ -13,6 +13,11 @@ import numpy as np
 from pytorch_transformers import GPT2LMHeadModel, GPT2Tokenizer
 from tqdm import trange
 
+
+from colorama import init
+init(autoreset=True)
+from colorama import Style, Fore
+
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -26,7 +31,7 @@ print(input_ids)
 outputs = model(input_ids, labels=input_ids)
 loss, logits = outputs[:2]
 print(loss)
-
+print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
 
 def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
     """ Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
@@ -58,7 +63,7 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
         logits[indices_to_remove] = filter_value
     return logits
     
-def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=0, top_p=0.0, device='cpu'):
+def sample_sequence(model, length, context, tokenizer, num_samples=1, temperature=1, top_k=0, top_p=0.0, device='cpu'):
     print("Sample")
     context = torch.tensor(context, dtype=torch.long, device=device)
     print(context)
@@ -72,27 +77,42 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1, top_k=
     print(generated.size())
     print("Generate::::::::::::::")
     with torch.no_grad():#labels=input_ids
-        for _ in trange(length):
-            input_ids = generated            
-            labels = input_ids            
-            outputs = model(input_ids, labels=labels)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet (cached hidden-states)
-            print("\noutput size: ")
-            print(outputs[0].size())
-            next_token_logits = outputs[1][0, -1, :] / temperature
+        for i in trange(length):
+            #print("Step "+str(i))
+            input_ids = generated               
+            #loss, output, past = model(input_ids, labels=labels)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet (cached hidden-states)
+            if i > 0:
+                #loss, output, past = model(next_token.unsqueeze(0), labels=next_token.unsqueeze(0), past=past)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet (cached hidden-states)
+                output, past = model(next_token.unsqueeze(0), past=past)  # Note: we could also use 'past' with GPT-2/Transfo-XL/XLNet (cached hidden-states)
+                #output, past = model(generated)
+                #print(generated.size())
+                
+            else:
+                output, past = model(input_ids) #, labels=input_ids
+            #print("----")
+            #print(len(input_ids))
+            #print("\noutput size: ")            
+            
+            #print()
+            next_token_logits = output[0, -1, :] / temperature
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
             next_token = torch.multinomial(F.softmax(filtered_logits, dim=-1), num_samples=1)
+            print("Token:[{}]=[{}]".format(tokenizer.convert_ids_to_tokens(next_token.item()), next_token.item()))
+            #print(generated.size())
+            #print(next_token.unsqueeze(0).size())
             generated = torch.cat((generated, next_token.unsqueeze(0)), dim=1)
     return generated
     
     
 while True:
-    raw_text = "The first law of robotics"
+    raw_text = "A simple test"
     context_tokens = tokenizer.encode(raw_text)
     print(context_tokens)
     out = sample_sequence(
         model=model,
         context=context_tokens,
-        length=5,
+        tokenizer=tokenizer,
+        length=50,
         temperature=1.,
         top_k=0,
         top_p=0.9,
@@ -100,6 +120,6 @@ while True:
     )
     out = out[0, len(context_tokens):].tolist()
     text = tokenizer.decode(out, clean_up_tokenization_spaces=False)
-    print(text)
+    print("{}{}{}{}".format(Fore.GREEN,raw_text,Fore.RED,text))
     print("_"*20)
     break
