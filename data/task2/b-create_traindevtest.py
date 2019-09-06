@@ -35,9 +35,9 @@ for MEI in MEIs:
         if MEI == "all":
             fname = ""
         else:
-            fname = MEI.replace(" ","_")
+            fname = "-"+MEI.replace(" ","_")
         src_lookup_file_prefix = os.path.join("lookup","bpe","src"+fname+"-1024")
-        tgt_lookup_file_prefix = os.path.join("lookup","bpe","src"+fname+"-1024")
+        tgt_lookup_file_prefix = os.path.join("lookup","bpe","src"+fname+"-1024")        
 
     if sys.argv[1] == "gpt2":
         lookup_type = "gpt2"
@@ -45,10 +45,14 @@ for MEI in MEIs:
         tgt_lookup_file_prefix = os.path.join("lookup","gpt2","tgt")
 
     # load lookups
-    src_lookup = Lookup(type=lookup_type)
-    src_lookup.load(file_prefix = src_lookup_file_prefix)
-    tgt_lookup = Lookup(type=lookup_type)
-    tgt_lookup.load(file_prefix = tgt_lookup_file_prefix)
+    try:
+        src_lookup = Lookup(type=lookup_type)
+        src_lookup.load(file_prefix = src_lookup_file_prefix)
+        tgt_lookup = Lookup(type=lookup_type)
+        tgt_lookup.load(file_prefix = tgt_lookup_file_prefix)
+    except:
+        print("ERROR with "+src_lookup_file_prefix)
+        continue
 
     data = json.load(open(input_json_file,"r",encoding="utf8"))
     

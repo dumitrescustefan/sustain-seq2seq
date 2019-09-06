@@ -181,6 +181,8 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
              
             total_loss += loss.item()
             log_average_loss = total_loss / (batch_index+1)
+            #for key in display_variables:
+            #    if "loss" in key:                    
             if "coverage_loss" in display_variables:
                 total_coverage_loss += display_variables["coverage_loss"]
                 log_total_coverage_loss = total_coverage_loss / (batch_index+1)

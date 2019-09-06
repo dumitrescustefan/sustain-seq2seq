@@ -9,8 +9,6 @@ class EncoderDecoder(nn.Module):
     def __init__(self, src_lookup, tgt_lookup, encoder, decoder, device):
         super().__init__()
         
-        print(device)
-        print("asdasd")
         if torch.cuda.is_available():            
             self.cuda = True
             self.device = torch.device('cuda')
@@ -32,10 +30,10 @@ class EncoderDecoder(nn.Module):
         self.to(self.device)
 
     def forward(self, x_tuple, y_tuple, teacher_forcing_ratio=0.):
-        raise Exception("not implemented")
+        raise Exception("forward() not implemented")
     
     def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 0.5):
-        raise Exception("not implemented")
+        raise Exception("run_batch() not implemented")
 
     def load_checkpoint(self, folder, extension):
         filename = os.path.join(folder, "checkpoint." + extension)

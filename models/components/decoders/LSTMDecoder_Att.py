@@ -26,7 +26,7 @@ class Decoder(nn.Module):
         self.output_linear = nn.Linear(hidden_dim, vocab_size)
         
         # overwrite output to allow context from the attention to be added to the output layer
-        intermediate_size = int( ((hidden_dim+input_size+emb_dim) + vocab_size) / 16 )
+        intermediate_size = int( ((hidden_dim+input_size+emb_dim) + vocab_size) * 2 )
         self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, intermediate_size)
         self.softmax_linear = nn.Linear(intermediate_size, vocab_size)
 

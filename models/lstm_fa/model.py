@@ -95,7 +95,7 @@ class MyEncoderDecoder(EncoderDecoder):
                 # create target distribution
                 target_attention_distribution = attention_weights.new_full((batch_size, dec_seq_len, enc_seq_len), 1e-31)
                 for decoder_index in range(0, dec_seq_len):
-                    y = scipy.stats.norm.pdf(x, decoder_index, 4) # loc (mean) is decoder_step, scale (std dev) = 1.        
+                    y = scipy.stats.norm.pdf(x, decoder_index, 2) # loc (mean) is decoder_step, scale (std dev) = 1.        
                     y = y / np.sum(y) # rescale to make it a PDF
                     gaussian_dist = torch.tensor(y, dtype = attention_weights.dtype, device = self.device) # make it a tensor, it's [seq_len]
                     target_attention_distribution[:,decoder_index, :] = gaussian_dist.repeat(batch_size, 1) # same for all examples in batch, now it's [batch_size, seq_len]
@@ -106,7 +106,7 @@ class MyEncoderDecoder(EncoderDecoder):
                 #print(target_attention_distribution[0,0,:])                                
                 #print(attention_weights_tensor[0,0,:])                
                 
-                attention_loss = (tf_ratio/2.) * self.attention_criterion(target_attention_distribution.log().permute(0,2,1), attention_weights.permute(0,2,1)) / self.aux_loss_weight
+                attention_loss = tf_ratio * self.attention_criterion(target_attention_distribution.log().permute(0,2,1), attention_weights.permute(0,2,1)) / self.aux_loss_weight
                 disp_attention_loss = attention_loss.item()
                 loss += attention_loss            
         

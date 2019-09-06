@@ -37,14 +37,19 @@ if __name__ == "__main__":
     #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
     #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
     
-    data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
-    src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
+    #data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
+    #src_lookup = Lookup(type="gpt2")
+    #tgt_lookup = Lookup(type="gpt2")
     
+    data_folder = os.path.join("..", "..", "data", "task2", "ready", "bpe")
+    src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "bpe","src-Business_Ethics-1024")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "bpe","src-Business_Ethics-1024")
+    src_lookup = Lookup(type="bpe")
+    tgt_lookup = Lookup(type="bpe")
     
-    src_lookup = Lookup(type="gpt2")
-    src_lookup.load(src_lookup_prefix)
-    tgt_lookup = Lookup(type="gpt2")
+    src_lookup.load(src_lookup_prefix)    
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix = "Business_Ethics_")
     
@@ -77,7 +82,7 @@ if __name__ == "__main__":
                 lstm_dropout=0.4,
                 dropout=0.4,
                 vocab_size=len(tgt_lookup),                
-                attention_type="additive", 
+                attention_type="coverage", 
                 device=device)
         
     model = MyEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = 1e3, device = device)
@@ -112,12 +117,12 @@ if __name__ == "__main__":
           test_loader,                          
           model_store_path = os.path.join("..", "..", "train", "lstm_fa"), 
           resume = False, 
-          max_epochs = 400, 
-          patience = 25, 
+          max_epochs = 500, 
+          patience = 30, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
           tf_start_ratio=.5,
-          tf_end_ratio=.1,
+          tf_end_ratio=.0,
           tf_epochs_decay=50)
           
     # ######################################################################
