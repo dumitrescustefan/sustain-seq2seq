@@ -17,9 +17,9 @@ from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
 from models.util.utils import select_processing_device
 
-from models.lstm_fa.model import RNNEncoderDecoder
+from models.lstm_fa.model import MyEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
-from models.components.decoders.LSTMDecoder_ForcedAtt import Decoder
+from models.components.decoders.LSTMDecoder_Att import Decoder
 
 if __name__ == "__main__":    
     
@@ -80,7 +80,7 @@ if __name__ == "__main__":
                 attention_type="additive", 
                 device=device)
         
-    model = RNNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, device = device)
+    model = MyEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = 1e3, device = device)
                 
     print("_"*80+"\n")
     print(model)

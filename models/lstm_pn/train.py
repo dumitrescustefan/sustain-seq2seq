@@ -17,7 +17,7 @@ from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
 from models.util.utils import select_processing_device
 
-from models.lstm_pn.model import PNEncoderDecoder
+from models.lstm_pn.model import MyEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
 from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
 
@@ -54,10 +54,7 @@ if __name__ == "__main__":
     tgt_lookup = Lookup(type="gpt2")
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix = "Business_Ethics_")
-    
-    #xXXXXXXXXXX
-    #valid_loader = train_loader
-    
+            
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
         len(valid_loader.dataset.X),
@@ -91,7 +88,7 @@ if __name__ == "__main__":
                 vocab_size=len(tgt_lookup),                
                 device=device)
         
-    model = PNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = aux_loss_weight, device = device)
+    model = MyEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = aux_loss_weight, device = device)
                 
     print("_"*80+"\n")
     print(model)

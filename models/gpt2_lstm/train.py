@@ -17,7 +17,7 @@ from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
 from models.util.utils import select_processing_device
 
-from models.gpt2_lstm.model import GPT2LSTMEncoderDecoder
+from models.gpt2_lstm.model import MyEncoderDecoder
 from models.components.encoders.GPT2Encoder import Encoder
 from models.components.decoders.LSTMDecoder_Att import Decoder
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
                 attention_type="coverage",
                 device=device)
         
-    model = GPT2LSTMEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, device = device)
+    model = MyEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, device = device)
                 
     print("_"*80+"\n")
     print(model)

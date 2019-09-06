@@ -14,13 +14,13 @@ from models.util.lookup import Lookup
 
 def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epoch, log_object):
     # plot attention weights for the first example of the batch; USE ONLY FOR DEV where len(predicted_y)=len(gold_y)
-    # X is a tensor of size [batch_size, x_seq_len] 
-    # y is a tensor of size [batch_size, y_seq_len]
-    # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
+    # X is a tuple, first element is a tensor of size [batch_size, x_seq_len] 
+    # y is a tuple, first element is a tensor of size [batch_size, y_seq_len]
+    # attention_weights is a tensor of [batch_size, y_seq_len, x_seq_len] elements
     
     # X src labels for the first example
     input_labels = []
-    X_list = X[0].cpu().tolist()
+    X_list = X[0].cpu().tolist()    
     for id in X_list:
         input_labels.append(src_lookup.convert_ids_to_tokens(int(id)))
     
@@ -31,11 +31,11 @@ def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epo
         output_labels.append(tgt_lookup.convert_ids_to_tokens(int(id)))    
     
     # map weights
-    data = np.zeros((len(X_list), len(y_list)))
-    for i in range(len(attention_weights)): # each timestep i
-        attention_over_inputs_at_timestep_i = attention_weights[i][0]
-        data[:,i] = attention_over_inputs_at_timestep_i
-    
+    data = attention_weights[0,:,:].t().cpu().tolist()
+    #data = np.zeros((len(X_list), len(y_list)))
+    #for i in range(len(data)): # each timestep i
+    #    attention_over_inputs_at_timestep_i = attention_weights[i][0]
+    #    data[:,i] = attention_over_inputs_at_timestep_i
     log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
 def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos_tokens = True):
@@ -201,60 +201,36 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             t_display_dict["x_y_len"] = str(len(x_batch[0]))+"/"+str(len(y_batch[0]))
             t.set_postfix(ordered_dict = t_display_dict)
            
-                    
-            #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, loss.item(), y_index = 0)
-            #log_object.var("Loss vs LR (epoch "+str(current_epoch)+")|Loss|LR", batch_index, current_scheduler_lr, y_index = 1)
-            #log_object.draw()
-            #log_object.draw(last_quarter=True)
-            
-            """log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.memory_allocated()/1024/1024, y_index=0)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.memory_cached()/1024/1024, y_index=2)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
-            log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached|X_len*10", batch_index, len(x_batch[0])*10, y_index=4)
-            log_object.draw()
-            """             
-            del output, x_batch, y_batch, loss #, l2_reg
-            #torch.cuda.empty_cache()
-            #if model.cuda:                        
-            #    torch.cuda.synchronize()
+            del output, x_batch, y_batch, loss 
             
             #break
             
         del t
-        gc.collect()
-        
+        gc.collect()        
         if model.cuda:
             torch.cuda.empty_cache()
         
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_allocated()/1024/1024, y_index=0)
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_allocated()/1024/1024, y_index=1)
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.memory_cached()/1024/1024, y_index=2)
-        #log_object.var("GPU Memory|Allocated|Max allocated|Cached|Max cached", batch_index+1, torch.cuda.max_memory_cached()/1024/1024, y_index=3)
-        #log_object.draw()
-        
         log_object.text("\ttraining_loss={}".format(log_average_loss), display = False)
-        log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)        
-        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_average_loss, y_index=0)                
-        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_total_generator_loss, y_index=1)                
-        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_total_coverage_loss, y_index=2)                
+        log_object.var("Loss|Train loss|Validation loss", current_epoch, log_average_loss, y_index=0)
+        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_average_loss, y_index=0)
+        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_total_generator_loss, y_index=1)
+        log_object.var("Train Loss and Aux Loss|Total loss|Generator loss|Aux loss", current_epoch, log_total_coverage_loss, y_index=2)
         time_train = time.time() - time_start
 
         # dev        
-        time_start = time.time()        
+        time_start = time.time()
         if valid_loader is not None:
             
             model.eval()
             with torch.no_grad():
-                total_loss = 0                
+                total_loss = 0
                 _print_examples(model, valid_loader, batch_size, model.src_lookup, model.tgt_lookup)
 
                 t = tqdm(valid_loader, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [valid]", unit="b")
                 y_gold = list()
                 y_predicted = list()
                 
-                for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):                            
+                for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):
                     if model.cuda:
                         x_batch = x_batch.cuda()
                         x_batch_lenghts = x_batch_lenghts.cuda()
@@ -310,8 +286,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                 save_optimizer_checkpoint (optimizer, model_store_path, extension="best")            
                 current_patience = patience
             
-            # plot attention_weights for the first example of the last batch (does not matter which batch)            
-            # batch_attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
+            # batch_attention_weights is a list of [batch_size, dec_seq_len, enc_seq_len] elements, where dim=2 is the softmax distribution for that decoder timestep            
             _plot_attention_weights(x_batch, y_batch, model.src_lookup, model.tgt_lookup, batch_attention_weights, current_epoch, log_object)
             
             # dev cleanup

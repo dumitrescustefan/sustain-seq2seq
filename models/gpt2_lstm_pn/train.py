@@ -17,7 +17,7 @@ from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
 from models.util.utils import select_processing_device
 
-from models.gpt2_lstm_pn.model import GPT2LSTMPNEncoderDecoder
+from models.gpt2_lstm_pn.model import MyEncoderDecoder
 from models.components.encoders.GPT2Encoder import Encoder
 from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
 
@@ -36,21 +36,24 @@ if __name__ == "__main__":
     tgt_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","tgt-4096")    
     """
     """ CMU DICT """
-    batch_size = 64
-    min_seq_len_X = 3
-    max_seq_len_X = 20
+    batch_size = 4
+    min_seq_len_X = 0
+    max_seq_len_X = 1000
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X    
-    data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "gpt2")
-    src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
+    #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
+    data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
+    src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
     
     
     src_lookup = Lookup(type="gpt2")
     src_lookup.load(src_lookup_prefix)
     tgt_lookup = Lookup(type="gpt2")
     tgt_lookup.load(tgt_lookup_prefix)
-    train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix = "Business_Ethics_")
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -80,7 +83,7 @@ if __name__ == "__main__":
                 vocab_size=len(tgt_lookup),                
                 device=device)
         
-    model = GPT2LSTMPNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, aux_loss_weight = aux_loss_weight, device = device)
+    model = MyEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, aux_loss_weight = aux_loss_weight, device = device)
                 
     print("_"*80+"\n")
     print(model)
@@ -113,7 +116,7 @@ if __name__ == "__main__":
           patience = 50, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
-          tf_start_ratio=1.0,
+          tf_start_ratio=0.8,
           tf_end_ratio=0.1,
           tf_epochs_decay=50)
           

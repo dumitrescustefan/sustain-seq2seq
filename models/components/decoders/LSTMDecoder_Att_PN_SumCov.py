@@ -53,25 +53,26 @@ class Decoder(nn.Module):
         tgt, tgt_lengths, tgt_masks = y_tuple[0], y_tuple[1], y_tuple[2]
         
         batch_size = tgt.shape[0]
-        src_seq_len = src.shape[1]
-        seq_len_dec = tgt.shape[1]        
-        attention_weights = []
+        enc_seq_len = src.shape[1]
+        dec_seq_len = tgt.shape[1]        
+       
         
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
-        output = torch.zeros(batch_size,seq_len_dec-1,self.vocab_size).to(self.device)
+        output = torch.zeros(batch_size,dec_seq_len-1,self.vocab_size).to(self.device)
         #output.requires_grad=False
         coverage = torch.zeros(batch_size, self.vocab_size).to(self.device)
         coverage_loss = 0
         
-        # Loop over the rest of tokens in the tgt seq_len_dec.
-        for i in range(0, seq_len_dec-1):
+        attention_weights = enc_output.new_zeros((batch_size, dec_seq_len-1, enc_seq_len), requires_grad = False) 
+        
+        # Loop over the rest of tokens in the tgt dec_seq_len.
+        for i in range(0, dec_seq_len-1):
             # Calculate the context vector at step i.
-            # context_vector is [batch_size, encoder_size], attention_weights is [batch_size, src_seq_len, 1], coverage is [batch_size, vocab_size]
+            # context_vector is [batch_size, encoder_size], attention_weights is [batch_size, enc_seq_len, 1], coverage is [batch_size, vocab_size]
             context_vector, step_attention_weights  = self.attention(state_h=dec_states[0], enc_output=enc_output, coverage=coverage, mask=src_masks)
             
-            
-            # save attention weights incrementally
-            attention_weights.append(step_attention_weights.squeeze(2).cpu().tolist())
+            # save the tensor format [batch_size, dec_seq_len, enc_seq_len]
+            attention_weights[:, i, :] = step_attention_weights.squeeze(2)
             
             if np.random.uniform(0, 1) < teacher_forcing_ratio or i is 0:
                 # Concatenates the i-th embedding of the tgt with the corresponding  context vector over the second
@@ -115,7 +116,7 @@ class Decoder(nn.Module):
             p_gen = torch.sigmoid(self.p_gen_linear(p_gen_input)) 
             
             # Calculate final distribution, final_dist will be [batch_size, vocab_size]
-            # vocab_dist is [batch_size, vocab_size], step_attention_weights is [batch_size, src_seq_len, 1], src is [batch_size, src_seq_len] and contains indices
+            # vocab_dist is [batch_size, vocab_size], step_attention_weights is [batch_size, enc_seq_len, 1], src is [batch_size, enc_seq_len] and contains indices
             # first, we must use step_attention_weights to get attention_dist to be [batch_size, vocab_size]
             attention_dist = torch.zeros(batch_size, self.vocab_size).to(self.device)
             attention_dist = attention_dist.scatter_add(1, src, step_attention_weights.squeeze(2))
@@ -140,7 +141,7 @@ class Decoder(nn.Module):
             # calculate the next coverage by adding step_attention_weights where appropriate                        
             coverage = coverage.scatter_add(1, src, step_attention_weights.squeeze(2))
             
-        # output is a tensor [batch_size, seq_len_dec, vocab_size], log-ged to be prepared for NLLLoss 
-        # attention_weights is a list of [batch_size, seq_len] elements, where each element is the softmax distribution for a timestep
-        # coverage_loss is a scalar tensor
+        # output is a tensor [batch_size, dec_seq_len, vocab_size], log-ged to be prepared for NLLLoss 
+        # attention_weights is a tensor [batch_size, dec_seq_len, enc_seq_len] elements 
+        # coverage_loss is a scalar tensor        
         return {'output':torch.log(output + 1e-31), 'attention_weights':attention_weights, 'coverage_loss':coverage_loss}

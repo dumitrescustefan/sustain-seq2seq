@@ -4,20 +4,27 @@ sys.path.insert(0, '../..')
 from collections import OrderedDict
 import torch
 import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
+import scipy.stats
 from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 
-class RNNEncoderDecoder(EncoderDecoder):
-    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden, device):
+
+class MyEncoderDecoder(EncoderDecoder):
+    def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden, aux_loss_weight, device):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 
         self.dec_transfer_hidden = dec_transfer_hidden
-       
+        self.aux_loss_weight = aux_loss_weight
+        
         if dec_transfer_hidden == True:
             assert encoder.num_layers == decoder.num_layers, "For transferring the last hidden state from encoder to decoder, both must have the same number of layers."
 
         # Transform h from encoder's [num_layers * 2, batch_size, enc_hidden_dim/2] to decoder's [num_layers * 1, batch_size, dec_hidden_dim], same for c; batch_size = 1 (last timestep only)
         self.h_state_linear = nn.Linear(int(encoder.hidden_dim * encoder.num_layers/1), decoder.hidden_dim * decoder.num_layers * 1)
         self.c_state_linear = nn.Linear(int(encoder.hidden_dim * encoder.num_layers/1), decoder.hidden_dim * decoder.num_layers * 1)
+
+        self.attention_criterion = nn.KLDivLoss(reduction='batchmean')
 
         self.to(self.device)
 
@@ -51,7 +58,7 @@ class RNNEncoderDecoder(EncoderDecoder):
         encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
         output = encoder_dict["output"]
         attention_weights = encoder_dict["attention_weights"]        
-
+        
         # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
         bos_tensor = torch.zeros(batch_size, 1, self.decoder.vocab_size).to(self.device)
         # Marks the corresponding BOS position with a probability of 1.
@@ -62,20 +69,49 @@ class RNNEncoderDecoder(EncoderDecoder):
 
         return output, attention_weights
     
-    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0, aux_loss_weight = 0.5):
+    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0):
         (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
         (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
         
-        self.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1], force_weight = tf_ratio)
+        self.decoder.attention.init_batch(x_batch.size(0), x_batch.size(1))
         
         output, attention_weights = self.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
         
+        disp_attention_loss = 0
+        disp_gen_loss = 0
+        loss = 0
+    
         if criterion is not None:            
-            loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())        
-        else:
-            loss = 0
+            loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())    
+            disp_gen_loss = loss.item()
+            
+            if tf_ratio>.0: # additional loss for attention distribution , attention_weights is [batch_size, seq_len] and is a list              
+                batch_size = attention_weights.size(0)
+                dec_seq_len = attention_weights.size(1)
+                enc_seq_len = attention_weights.size(2)
+                
+                x = np.linspace(0, enc_seq_len, enc_seq_len)
+                
+                # create target distribution
+                target_attention_distribution = attention_weights.new_full((batch_size, dec_seq_len, enc_seq_len), 1e-31)
+                for decoder_index in range(0, dec_seq_len):
+                    y = scipy.stats.norm.pdf(x, decoder_index, 4) # loc (mean) is decoder_step, scale (std dev) = 1.        
+                    y = y / np.sum(y) # rescale to make it a PDF
+                    gaussian_dist = torch.tensor(y, dtype = attention_weights.dtype, device = self.device) # make it a tensor, it's [seq_len]
+                    target_attention_distribution[:,decoder_index, :] = gaussian_dist.repeat(batch_size, 1) # same for all examples in batch, now it's [batch_size, seq_len]
+                
+                target_attention_distribution[target_attention_distribution<1e-31] = 1e-31
+                attention_weights[attention_weights<1e-31] = 1e-31
+                
+                #print(target_attention_distribution[0,0,:])                                
+                #print(attention_weights_tensor[0,0,:])                
+                
+                attention_loss = (tf_ratio/2.) * self.attention_criterion(target_attention_distribution.log().permute(0,2,1), attention_weights.permute(0,2,1)) / self.aux_loss_weight
+                disp_attention_loss = attention_loss.item()
+                loss += attention_loss            
         
-        return output, loss, attention_weights, {}
+        
+        return output, loss, attention_weights, {'gen_loss': disp_gen_loss, 'att_loss':disp_attention_loss}
         
     def transfer_hidden_from_encoder_to_decoder(self, enc_states):
         batch_size = enc_states[0].shape[1]

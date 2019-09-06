@@ -111,7 +111,7 @@ class Attention(nn.Module):
         # [1, batch_size, decoder_hidden_size] -> [batch_size, 1, decoder_hidden_size]
         return state_h.permute(1, 0, 2)
 
-    def reset_coverage(self, batch_size, enc_seq_len):
+    def init_batch(self, batch_size, enc_seq_len):
         if self.type == "coverage":
             self.C = torch.zeros(batch_size, enc_seq_len, self.coverage_dim, device=self.device)
             self.gru_input = torch.zeros(batch_size, 1, self.coverage_input_size, device=self.device)

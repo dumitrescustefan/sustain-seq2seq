@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 
-class RNNEncoderDecoder(EncoderDecoder):
+class MyEncoderDecoder(EncoderDecoder):
     def __init__(self, src_lookup, tgt_lookup, encoder, decoder, dec_transfer_hidden, device):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 

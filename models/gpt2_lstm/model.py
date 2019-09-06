@@ -7,7 +7,7 @@ import torch.nn as nn
 from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 from torch.autograd import Variable
 
-class GPT2LSTMEncoderDecoder(EncoderDecoder):
+class MyEncoderDecoder(EncoderDecoder):
     def __init__(self, src_lookup, tgt_lookup, encoder, decoder, device):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
 
@@ -53,8 +53,8 @@ class GPT2LSTMEncoderDecoder(EncoderDecoder):
         (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
         (y_batch, y_batch_lenghts, y_batch_mask) = y_tuple
         
-        if hasattr(self.decoder.attention, 'reset_coverage'):
-            self.decoder.attention.reset_coverage(x_batch.size()[0], x_batch.size()[1])
+        if hasattr(self.decoder.attention, 'init_batch'):
+            self.decoder.attention.init_batch(x_batch.size()[0], x_batch.size()[1])
         
         output, attention_weights = self.forward((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), tf_ratio)
         
