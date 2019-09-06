@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from models.components.attention.Attention import Attention
+from models.components.attention.ForcedAttention import Attention
 
 class Decoder(nn.Module):
     def __init__(self, emb_dim, input_size, hidden_dim, num_layers, vocab_size, lstm_dropout, dropout, attention_type, device):
@@ -26,8 +26,9 @@ class Decoder(nn.Module):
         self.output_linear = nn.Linear(hidden_dim, vocab_size)
         
         # overwrite output to allow context from the attention to be added to the output layer
-        self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, int((hidden_dim+input_size+emb_dim)/2))
-        self.softmax_linear = nn.Linear(int((hidden_dim+input_size+emb_dim)/2), vocab_size)
+        intermediate_size = int( ((hidden_dim+input_size+emb_dim) + vocab_size) / 16 )
+        self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, intermediate_size)
+        self.softmax_linear = nn.Linear(intermediate_size, vocab_size)
 
         self.device = device
         self.to(device)
@@ -41,22 +42,27 @@ class Decoder(nn.Module):
         encoder_mask = x_tuple[2]
         
         batch_size = input.shape[0]
+        seq_len_enc = x_tuple[0].size(1)
         seq_len_dec = input.shape[1]        
         attention_weights = []
         
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
         output = torch.zeros(batch_size,seq_len_dec-1,self.vocab_size).to(self.device)
-        output.requires_grad=False
+        output.requires_grad = False
+        
+        attention_weights_tensor = torch.zeros(batch_size, seq_len_dec-1, seq_len_enc).to(self.device)
         
         # Loop over the rest of tokens in the input seq_len_dec.
         for i in range(0, seq_len_dec-1):
             # Calculate the context vector at step i.
             # context_vector is [batch_size, encoder_size], attention_weights is [batch_size, seq_len, 1]
-            context_vector, step_attention_weights = self.attention(state_h=dec_states[0], enc_output=enc_output, mask=encoder_mask)
+            context_vector, step_attention_weights = self.attention(state_h=dec_states[0], enc_output=enc_output, decoder_step = i, dec_seq_len = seq_len_dec, mask=encoder_mask)
             
             # save attention weights incrementally
             attention_weights.append(step_attention_weights.squeeze(2).cpu().tolist())
-            
+            attention_weights_tensor[batch_size, i:i+1, :] = step_attention_weights.squeeze(2)
+            print(attention_weights_tensor[batch_size, i:i+1, :].size())
+            print(step_attention_weights.squeeze(2).size())
             if np.random.uniform(0, 1) < teacher_forcing_ratio or i is 0:
                 # Concatenates the i-th embedding of the input with the corresponding  context vector over the second
                 # dimensions. Transforms the 2-D tensor to 3-D sequence tensor with length 1. [batch_size, emb_dim] +

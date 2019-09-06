@@ -19,7 +19,7 @@ from models.util.utils import select_processing_device
 
 from models.lstm_pn.model import PNEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
-from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
+from models.components.decoders.LSTMDecoder_Att_PN_MTCov import Decoder
 
 if __name__ == "__main__":    
    

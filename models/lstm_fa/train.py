@@ -17,26 +17,15 @@ from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
 from models.util.utils import select_processing_device
 
-from models.lstm_pn.model import PNEncoderDecoder
+from models.lstm_fa.model import RNNEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
-from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
+from models.components.decoders.LSTMDecoder_ForcedAtt import Decoder
 
 if __name__ == "__main__":    
-   
+    
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    """ FR-EN 
     batch_size = 8
-    min_seq_len_X = 0
-    max_seq_len_X = 500
-    min_seq_len_y = min_seq_len_X
-    max_seq_len_y = max_seq_len_X    
-    data_folder = os.path.join("..", "..", "data", "fren", "ready", "bpe")
-    src_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","src-4096")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "fren", "lookup", "bpe","tgt-4096")    
-    """
-    """ CMU DICT """
-    batch_size = 4
     min_seq_len_X = 0
     max_seq_len_X = 1000
     min_seq_len_y = min_seq_len_X
@@ -44,6 +33,10 @@ if __name__ == "__main__":
     #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
     #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
     #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
+    #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "gpt2")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
+    
     data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
     src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
     tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
@@ -55,8 +48,6 @@ if __name__ == "__main__":
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix = "Business_Ethics_")
     
-    #xXXXXXXXXXX
-    #valid_loader = train_loader
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -70,28 +61,26 @@ if __name__ == "__main__":
     # ######################################################################
     
     # MODEL TRAINING #######################################################
-    
-    aux_loss_weight = 0.03
-    
     encoder = Encoder(
                 vocab_size=len(src_lookup),
                 emb_dim=300,
                 hidden_dim=512, # meaning we will have dim/2 for forward and dim/2 for backward lstm
                 num_layers=2,
                 lstm_dropout=0.4,
-                dropout=0.4,
+                dropout=0.4,                
                 device=device)
     decoder = Decoder(                
                 emb_dim=300,
                 input_size=512,                 
-                hidden_dim=256,
+                hidden_dim=512,
                 num_layers=2,
                 lstm_dropout=0.4,
                 dropout=0.4,
                 vocab_size=len(tgt_lookup),                
+                attention_type="additive", 
                 device=device)
         
-    model = PNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = aux_loss_weight, device = device)
+    model = RNNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, device = device)
                 
     print("_"*80+"\n")
     print(model)
@@ -112,25 +101,23 @@ if __name__ == "__main__":
     
     lr_scheduler = None
     
-    #from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
+    from models.components.criteria.SmoothedCrossEntropyLoss import SmoothedCrossEntropyLoss
     #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=0.9)    
     #criterion = SmoothedCrossEntropyLoss(label_smoothing=1.) # simple crossentropy, no ignore index set
-    #criterion = SmoothedCrossEntropyLoss(ignore_index=0, label_smoothing=1.) # simple crossentropy, with ignore index set
-    criterion = nn.NLLLoss(ignore_index=tgt_lookup.convert_tokens_to_ids(tgt_lookup.pad_token))
-    
-    
+    criterion = SmoothedCrossEntropyLoss(ignore_index=tgt_lookup.convert_tokens_to_ids(tgt_lookup.pad_token), label_smoothing=1.) # simple crossentropy, with ignore index set
+        
     train(model, 
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_pn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm_fa"), 
           resume = False, 
           max_epochs = 400, 
           patience = 25, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
-          tf_start_ratio=1.0,
-          tf_end_ratio=0.1,
+          tf_start_ratio=.5,
+          tf_end_ratio=.1,
           tf_epochs_decay=50)
           
     # ######################################################################

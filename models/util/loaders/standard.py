@@ -7,25 +7,25 @@ import torch
 import torch.utils.data
 from functools import partial
 
-def loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000):
+def loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X = 5, max_seq_len_X = 1000, min_seq_len_y = 5, max_seq_len_y = 1000, custom_filename_prefix = ""):
     src_pad_id = src_lookup.convert_tokens_to_ids(src_lookup.pad_token)
     tgt_pad_id = tgt_lookup.convert_tokens_to_ids(tgt_lookup.pad_token)
     
     train_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "train", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
+        BiDataset(data_folder, "train", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
         collate_fn=partial(paired_collate_fn, src_padding_idx = src_pad_id, tgt_padding_idx = tgt_pad_id),
         shuffle=True)
 
     valid_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "dev", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
+        BiDataset(data_folder, "dev", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
         collate_fn=partial(paired_collate_fn, src_padding_idx = src_pad_id, tgt_padding_idx = tgt_pad_id))
     
     test_loader = torch.utils.data.DataLoader(
-        BiDataset(data_folder, "test", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y),
+        BiDataset(data_folder, "test", min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix),
         num_workers=torch.get_num_threads(),
         batch_size=batch_size,
         collate_fn=partial(paired_collate_fn, src_padding_idx = src_pad_id, tgt_padding_idx = tgt_pad_id))
@@ -65,15 +65,15 @@ def paired_collate_fn(insts, src_padding_idx, tgt_padding_idx):
     return ((src_seq_tensor, src_seq_lengths, src_seq_mask), (tgt_seq_tensor, tgt_seq_lengths, tgt_seq_mask))    
 
 class BiDataset(torch.utils.data.Dataset):
-    def __init__(self, root_dir, type, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y):  
+    def __init__(self, root_dir, type, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix):  
         self.root_dir = root_dir
 
         self.X = []
         self.y = []
         
-        if os.path.exists(os.path.join(root_dir,type+"_X.pt")):
-            X = torch.load(os.path.join(root_dir,type+"_X.pt"))
-            y = torch.load(os.path.join(root_dir,type+"_y.pt"))
+        if os.path.exists(os.path.join(root_dir,custom_filename_prefix+type+"_X.pt")):
+            X = torch.load(os.path.join(root_dir,custom_filename_prefix+type+"_X.pt"))
+            y = torch.load(os.path.join(root_dir,custom_filename_prefix+type+"_y.pt"))
             
             cut_over_X = 0
             cut_under_X = 0

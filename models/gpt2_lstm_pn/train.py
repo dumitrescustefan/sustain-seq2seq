@@ -19,7 +19,7 @@ from models.util.utils import select_processing_device
 
 from models.gpt2_lstm_pn.model import GPT2LSTMPNEncoderDecoder
 from models.components.encoders.GPT2Encoder import Encoder
-from models.components.decoders.LSTMDecoderWithAttentionAndPointerGenerator import Decoder
+from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
 
 if __name__ == "__main__":    
    

@@ -19,28 +19,35 @@ from models.util.utils import select_processing_device
 
 from models.lstm.model import RNNEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
-from models.components.decoders.LSTMDecoderWithAttention import Decoder
+from models.components.decoders.LSTMDecoder_Att import Decoder
 
 if __name__ == "__main__":    
     
     # DATA PREPARATION ######################################################
     print("Loading data ...")
-    batch_size = 128
+    batch_size = 8
     min_seq_len_X = 0
-    max_seq_len_X = 100
+    max_seq_len_X = 1000
     min_seq_len_y = min_seq_len_X
     max_seq_len_y = max_seq_len_X    
-    data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
-    src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
+    #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
     #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "gpt2")
     #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","src")
     #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "gpt2","tgt")
-    src_lookup = Lookup(type="bpe")
+    
+    data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
+    src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
+    
+    
+    src_lookup = Lookup(type="gpt2")
     src_lookup.load(src_lookup_prefix)
-    tgt_lookup = Lookup(type="bpe")
+    tgt_lookup = Lookup(type="gpt2")
     tgt_lookup.load(tgt_lookup_prefix)
-    train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y)
+    train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix = "Business_Ethics_")
+    
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -65,12 +72,12 @@ if __name__ == "__main__":
     decoder = Decoder(                
                 emb_dim=300,
                 input_size=512,                 
-                hidden_dim=256,
+                hidden_dim=512,
                 num_layers=2,
                 lstm_dropout=0.4,
                 dropout=0.4,
                 vocab_size=len(tgt_lookup),                
-                attention_type="additive",
+                attention_type="dot",
                 device=device)
         
     model = RNNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, device = device)
@@ -103,7 +110,7 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_attn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm"), 
           resume = False, 
           max_epochs = 400, 
           patience = 25, 

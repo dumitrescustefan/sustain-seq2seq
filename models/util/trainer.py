@@ -12,16 +12,6 @@ from models.util.validation_metrics import evaluate
 from models.util.utils import pretty_time, clean_sequences
 from models.util.lookup import Lookup
 
-def get_freer_gpu():   # TODO: PCI BUS ID not CUDA ID: os.environ['CUDA_VISIBLE_DEVICES']='2'
-    try:    
-        import numpy as np
-        os_string = subprocess.check_output("nvidia-smi -q -d Memory | grep -A4 GPU | grep Free", shell=True).decode("utf-8").strip().split("\n")    
-        memory_available = [int(x.strip().split()[2]) for x in os_string]
-        return int(np.argmax(memory_available))
-    except:
-        print("Warning: Could execute 'nvidia-smi', default GPU selection is id=0")
-        return 0
-
 def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epoch, log_object):
     # plot attention weights for the first example of the batch; USE ONLY FOR DEV where len(predicted_y)=len(gold_y)
     # X is a tensor of size [batch_size, x_seq_len] 
@@ -67,10 +57,7 @@ def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos
         y_sample = y_sample.cuda()
         y_sample_lenghts = y_sample_lenghts.cuda()
         y_sample_mask = y_sample_mask.cuda()
-        
-    if hasattr(model.decoder.attention, 'reset_coverage'):
-        model.decoder.attention.reset_coverage(X_sample.size()[0], X_sample.size()[1])
-    
+           
     model.eval()   
     y_pred_sample, _, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
     y_pred_sample = torch.argmax(y_pred_sample, dim=2)
@@ -83,8 +70,8 @@ def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos
             lst.append(int(X_sample[i][j].item()))
         if skip_bos_eos_tokens:
             lst = clean_sequences([lst], src_lookup)[0]
-        print(src_lookup.decode(lst, skip_bos_eos_tokens))
-            
+        print(src_lookup.decode(lst, skip_bos_eos_tokens).replace(src_lookup.pad_token,""))
+                    
         print("Y   :", end='')
         lst = []
         for j in range(len(y_sample[i])):
@@ -93,7 +80,7 @@ def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos
             #print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')        
         if skip_bos_eos_tokens:
             lst = clean_sequences([lst], tgt_lookup)[0]
-        print(tgt_lookup.decode(lst, skip_bos_eos_tokens))
+        print("\033[92m"+tgt_lookup.decode(lst, skip_bos_eos_tokens)+"\033[0m")
         
         print("PRED:", end='')
         lst = []
@@ -103,7 +90,7 @@ def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos
             #print(tgt_lookup.convert_ids_to_tokens(token) + " ", end='')
         if skip_bos_eos_tokens:
             lst = clean_sequences([lst], tgt_lookup)[0]
-        print(tgt_lookup.decode(lst, skip_bos_eos_tokens))
+        print("\033[93m"+tgt_lookup.decode(lst, skip_bos_eos_tokens)+"\033[0m")
         print("-" * 40)
 
 
@@ -314,7 +301,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                 log_object.var("Sequence Accuracy Scores|Dev scores|Test scores", current_epoch, eval["sar"], y_index=0)            
                 
                 log_object.text("\tValidation scores: METEOR={:.4f} , ROUGE-L(F)={:.4f}, average={:.4f}, SAR={:.4f}".format(eval["meteor"], eval["rouge_l_f"], score, eval["sar"]))
-                score = eval["sar"]
+                #score = eval["sar"]
            
             if score > best_accuracy:
                 log_object.text("\tBest score = {:.4f}".format(score))
