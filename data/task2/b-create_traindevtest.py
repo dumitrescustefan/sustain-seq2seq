@@ -102,8 +102,8 @@ for MEI in MEIs:
 
         try:
             new_order = []
-            if order[0]=="": # covnert to int or generate sequence if order == ""
-                for i in range (len(sentences)):
+            if order[0]=="": # convert to int or generate sequence if order == ""
+                for i in range(len(sentences)):
                     new_order.append(int(i))
             else:
                 #print(cpy_id)
@@ -111,16 +111,33 @@ for MEI in MEIs:
                 for i in range(len(sentences)):                                
                     if order[i] != "":
                         new_order.append(int(float(order[i]))-1)
+                    else:
+                        new_order.append(-1)
                 #print(new_order)
                 #print()
             
             src_line = ""
-            for i in range(len(new_order)):            
+            for i in range(len(new_order)):                 
                 index = new_order.index(i)
                 src_line += " "+sentences[index]
-                src_line = src_line.strip()
-        
+            src_line = src_line.strip()
+            
+            """print()
+            print()
+            print(order)
+            print(new_order)
+            
+            if sentences[-1] != sentences[index]:
+                print(sentences)
+                print("-----------")
+                print(output)
+                input("  ")
+            """
+            
             tgt_line = output.strip()
+            
+        except KeyboardInterrupt:
+            sys.exit(0)
         except:
             skipped_error += 1
             continue
