@@ -17,9 +17,9 @@ from models.util.lookup import Lookup
 from models.util.loaders.standard import loader
 from models.util.utils import select_processing_device
 
-from models.lstm_pn.model import PNEncoderDecoder
+from models.lstm_fa_pn.model import MyEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
-from models.components.decoders.LSTMDecoder_Att_PN_MTCov import Decoder
+from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
 
 if __name__ == "__main__":    
    
@@ -44,19 +44,22 @@ if __name__ == "__main__":
     #data_folder = os.path.join("..", "..", "data", "cmudict", "ready", "bpe")
     #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
     #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
-    data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
-    src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
     
+    #data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
+    #src_lookup = Lookup(type="gpt2")
+    #tgt_lookup = Lookup(type="gpt2")
     
-    src_lookup = Lookup(type="gpt2")
-    src_lookup.load(src_lookup_prefix)
-    tgt_lookup = Lookup(type="gpt2")
+    data_folder = os.path.join("..", "..", "data", "task2", "ready", "bpe")
+    src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "bpe","src-Business_Ethics-1024")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "bpe","src-Business_Ethics-1024")
+    src_lookup = Lookup(type="bpe")
+    tgt_lookup = Lookup(type="bpe")
+    
+    src_lookup.load(src_lookup_prefix)    
     tgt_lookup.load(tgt_lookup_prefix)
     train_loader, valid_loader, test_loader = loader(data_folder, batch_size, src_lookup, tgt_lookup, min_seq_len_X, max_seq_len_X, min_seq_len_y, max_seq_len_y, custom_filename_prefix = "Business_Ethics_")
-    
-    #xXXXXXXXXXX
-    #valid_loader = train_loader
     
     print("Loading done, train instances {}, dev instances {}, test instances {}, vocab size src/tgt {}/{}\n".format(
         len(train_loader.dataset.X),
@@ -71,7 +74,8 @@ if __name__ == "__main__":
     
     # MODEL TRAINING #######################################################
     
-    aux_loss_weight = 0.03
+    coverage_loss_weight = 0.001
+    attention_loss_weight = 0.001
     
     encoder = Encoder(
                 vocab_size=len(src_lookup),
@@ -84,14 +88,14 @@ if __name__ == "__main__":
     decoder = Decoder(                
                 emb_dim=300,
                 input_size=512,                 
-                hidden_dim=256,
+                hidden_dim=512,
                 num_layers=2,
                 lstm_dropout=0.4,
                 dropout=0.4,
                 vocab_size=len(tgt_lookup),                
                 device=device)
         
-    model = PNEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, aux_loss_weight = aux_loss_weight, device = device)
+    model = MyEncoderDecoder(src_lookup = src_lookup, tgt_lookup = tgt_lookup, encoder = encoder, decoder = decoder, dec_transfer_hidden = True, coverage_loss_weight = coverage_loss_weight, attention_loss_weight = attention_loss_weight, device = device)
                 
     print("_"*80+"\n")
     print(model)
@@ -107,7 +111,7 @@ if __name__ == "__main__":
     print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, amsgrad=True)#, weight_decay=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, amsgrad=True)#, weight_decay=1e-3)
     #optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=0.9)
     
     lr_scheduler = None
@@ -123,14 +127,14 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "lstm_pn"), 
+          model_store_path = os.path.join("..", "..", "train", "lstm_fa_pn"), 
           resume = False, 
-          max_epochs = 400, 
-          patience = 25, 
+          max_epochs = 500, 
+          patience = 35, 
           optimizer = optimizer,
           lr_scheduler = lr_scheduler,
-          tf_start_ratio=1.0,
-          tf_end_ratio=0.1,
+          tf_start_ratio=.5,
+          tf_end_ratio=.1,
           tf_epochs_decay=50)
           
     # ######################################################################

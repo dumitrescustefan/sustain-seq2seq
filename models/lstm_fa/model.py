@@ -55,9 +55,9 @@ class MyEncoderDecoder(EncoderDecoder):
             dec_states = ( hidden.zero_(), cell.zero_() )
 
         # Calculates the output of the decoder.        
-        encoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
-        output = encoder_dict["output"]
-        attention_weights = encoder_dict["attention_weights"]        
+        decoder_dict = self.decoder.forward(x_tuple, y_tuple, enc_output, dec_states, teacher_forcing_ratio)
+        output = decoder_dict["output"]
+        attention_weights = decoder_dict["attention_weights"]        
         
         # Creates a BOS tensor that must be added to the beginning of the output. [batch_size, 1, dec_vocab_size]
         bos_tensor = torch.zeros(batch_size, 1, self.decoder.vocab_size).to(self.device)
