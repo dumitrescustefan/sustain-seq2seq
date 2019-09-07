@@ -118,8 +118,9 @@ for MEI in MEIs:
             
             src_line = ""
             for i in range(len(new_order)):                 
-                index = new_order.index(i)
-                src_line += " "+sentences[index]
+                if i in new_order:
+                    index = new_order.index(i)
+                    src_line += " "+sentences[index]
             src_line = src_line.strip()
             
             """print()
@@ -138,9 +139,9 @@ for MEI in MEIs:
             
         except KeyboardInterrupt:
             sys.exit(0)
-        except:
-            skipped_error += 1
-            continue
+        #except:
+        #    skipped_error += 1
+        #    continue
             
         cnt+=1
         if cnt%100 == 0:
