@@ -39,7 +39,18 @@ def _plot_attention_weights(X, y, src_lookup, tgt_lookup, attention_weights, epo
     log_object.plot_heatmap(data, input_labels=input_labels, output_labels=output_labels, epoch=epoch)
 
 def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos_tokens = True):
-    (X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask) = iter(loader).next()
+    batch = iter(loader).next()
+    if model.cuda:
+        cuda_batch = []
+        for batch_part in batch:                   
+            cuda_batch_part = []
+            for tensor in batch_part:
+                cuda_batch_part.append(tensor.cuda())                    
+            cuda_batch.append(tuple(cuda_batch_part))
+        batch = tuple(cuda_batch)               
+    
+    X_sample, X_sample_lenghts, X_sample_mask = batch[0][0], batch[0][1], batch[0][2]
+    y_sample, y_sample_lenghts, y_sample_mask = batch[1][0], batch[1][1], batch[1][2]
     seq_len = min(seq_len,len(X_sample))
     print("Printing {} examples (batch_size={}):".format(seq_len, len(X_sample)))
     X_sample = X_sample[0:seq_len]
@@ -49,17 +60,9 @@ def _print_examples(model, loader, seq_len, src_lookup, tgt_lookup, skip_bos_eos
     y_sample = y_sample[0:seq_len]
     y_sample_lenghts = y_sample_lenghts[0:seq_len]
     y_sample_mask = y_sample_mask[0:seq_len]
-    
-    if model.cuda:
-        X_sample = X_sample.cuda()
-        X_sample_lenghts = X_sample_lenghts.cuda()
-        X_sample_mask = X_sample_mask.cuda()
-        y_sample = y_sample.cuda()
-        y_sample_lenghts = y_sample_lenghts.cuda()
-        y_sample_mask = y_sample_mask.cuda()
-           
+               
     model.eval()   
-    y_pred_sample, _, _, _ = model.run_batch((X_sample, X_sample_lenghts, X_sample_mask), (y_sample, y_sample_lenghts, y_sample_mask))
+    y_pred_sample, _, _, _ = model.run_batch(batch[0], batch[1])
     y_pred_sample = torch.argmax(y_pred_sample, dim=2)
     
     # print examples    
@@ -159,19 +162,20 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
         model.train()
         total_loss, log_average_loss, total_coverage_loss, log_total_coverage_loss, total_generator_loss, log_total_generator_loss = 0, 0, 0, 0, 0, 0
         t = tqdm(train_loader, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b") #ncols=120,
-        for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):        
-            #t.set_postfix(loss=log_average_loss, x_len=len(x_batch[0]), y_len=len(y_batch[0]))                        
+        for batch_index, batch in enumerate(t):                    
             if model.cuda:
-                x_batch = x_batch.cuda()
-                x_batch_lenghts = x_batch_lenghts.cuda()
-                x_batch_mask = x_batch_mask.cuda()
-                y_batch = y_batch.cuda()
-                y_batch_lenghts = y_batch_lenghts.cuda()
-                y_batch_mask = y_batch_mask.cuda()
-                                    
+                cuda_batch = []
+                for batch_part in batch:                   
+                    cuda_batch_part = []
+                    for tensor in batch_part:
+                        cuda_batch_part.append(tensor.cuda())                    
+                    cuda_batch.append(tuple(cuda_batch_part))
+                batch = tuple(cuda_batch)                
+            # batch ususally is ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask))
+                        
             optimizer.zero_grad()
             
-            output, loss, attention_weights, display_variables = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio)
+            output, loss, attention_weights, display_variables = model.run_batch(batch[0], batch[1], criterion, tf_ratio)
             
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)            
@@ -200,12 +204,12 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                     t_display_dict[key] = display_variables[key]                                 
             t_display_dict["cur_loss"] = loss.item()
             t_display_dict["loss"] = log_average_loss            
-            t_display_dict["x_y_len"] = str(len(x_batch[0]))+"/"+str(len(y_batch[0]))
+            t_display_dict["x_y_len"] = str(len(batch[0][0]))+"/"+str(len(batch[1][0]))
             t.set_postfix(ordered_dict = t_display_dict)
            
-            del output, x_batch, y_batch, loss 
+            del output, batch, loss 
             
-            #break
+            break
             
         del t
         gc.collect()        
@@ -232,16 +236,24 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                 y_gold = list()
                 y_predicted = list()
                 
-                for batch_index, ((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask)) in enumerate(t):
+                for batch_index, batch in enumerate(t):
                     if model.cuda:
-                        x_batch = x_batch.cuda()
-                        x_batch_lenghts = x_batch_lenghts.cuda()
-                        x_batch_mask = x_batch_mask.cuda()
-                        y_batch = y_batch.cuda()
-                        y_batch_lenghts = y_batch_lenghts.cuda()
-                        y_batch_mask = y_batch_mask.cuda()
+                        cuda_batch = []
+                        for batch_part in batch:                   
+                            cuda_batch_part = []
+                            for tensor in batch_part:
+                                cuda_batch_part.append(tensor.cuda())                    
+                            cuda_batch.append(tuple(cuda_batch_part))
+                        batch = tuple(cuda_batch)               
                     
-                    output, loss, batch_attention_weights, display_variables = model.run_batch((x_batch, x_batch_lenghts, x_batch_mask), (y_batch, y_batch_lenghts, y_batch_mask), criterion, tf_ratio=0.)
+                    x_batch = batch[0][0]
+                    x_batch_lenghts = batch[0][1]
+                    x_batch_mask = batch[0][2]
+                    y_batch = batch[1][0]
+                    y_batch_lenghts = batch[1][1]
+                    y_batch_mask = batch[1][2]
+                
+                    output, loss, batch_attention_weights, display_variables = model.run_batch(batch[0], batch[1], criterion, tf_ratio=0.)
             
                     y_predicted_batch = output.argmax(dim=2)
                     y_gold += y_batch.tolist()

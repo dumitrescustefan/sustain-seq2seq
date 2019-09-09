@@ -272,6 +272,10 @@ for MEI in MEIs:
 
     # save train dev test
     import torch    
+    
+    slots_obj = {'slots_dict':slots_dict,'slots_encoding':slots_encoding}
+    torch.save(slots_obj,os.path.join(output_folder, MEI.replace(" ","_")+"_slots_object.pt"))
+    
     torch.save(train_X,os.path.join(output_folder, MEI.replace(" ","_")+"_train_X.pt"))
     torch.save(train_y,os.path.join(output_folder, MEI.replace(" ","_")+"_train_y.pt"))    
     torch.save(train_slots,os.path.join(output_folder, MEI.replace(" ","_")+"_train_slots.pt"))    

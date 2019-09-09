@@ -16,6 +16,8 @@ class Decoder(nn.Module):
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
+        self.lstm_dropout = lstm_dropout
+        self.linear_dropout = dropout
         self.encoder_size = input_size
         self.decoder_size = hidden_dim
         
