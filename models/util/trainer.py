@@ -209,7 +209,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
            
             del output, batch, loss 
             
-            break
+            #break
             
         del t
         gc.collect()        

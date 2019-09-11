@@ -75,7 +75,7 @@ if __name__ == "__main__":
     slot_sizes = []
     for i in range(len(slot_encoding)):
         slot_name = slot_encoding[i]
-        slot_sizes.append(len(slot_dict[slot_name])) 
+        slot_sizes.append(1+len(slot_dict[slot_name])) # 0 is for not found
         print("\t Slot [{}] has [{}] values".format(slot_name, slot_sizes[-1]))
     # ######################################################################
     

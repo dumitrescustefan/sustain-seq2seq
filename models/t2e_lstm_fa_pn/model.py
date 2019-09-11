@@ -9,6 +9,52 @@ import torch.nn.functional as F
 import scipy.stats
 from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
 
+class MiniClassifier(nn.Module):
+    def __init__(self, vocab_size, dec_emb_dim, dec_hidden_dim, dec_num_layers, dec_dropout, dec_lstm_dropout):
+        super().__init__()
+        self.vocab_size = vocab_size                
+        self.slot_pre_dropout = nn.Dropout(dec_dropout)
+        self.slot_rnn = nn.LSTM(dec_emb_dim, int(dec_hidden_dim/2), num_layers=dec_num_layers, dropout=dec_lstm_dropout, bidirectional=True, batch_first=True)
+        self.slot_post_dropout = nn.Dropout(dec_dropout)
+        self.slot_linear = nn.Linear(dec_hidden_dim, vocab_size)
+        self.softmax = nn.Softmax(dim = 1)
+        self.criterion = nn.CrossEntropyLoss()#nn.KLDivLoss(reduction='batchmean')
+    
+    def forward(self, slot_embeddings, slots, my_index): #[batch_size, dec_seq_len, dec_vocab_size], [batch_size, slot_count] 
+        #print("My index is {}, output len is {}".format(my_index, self.vocab_size))
+        #print(slot_embeddings.size())
+        #print(slots.size())
+        #print(slots)
+        target = slots[:,my_index]
+        #print("target is : ")
+        #print(target)
+        x = self.slot_pre_dropout(slot_embeddings) #[batch_size, dec_seq_len, dec_vocab_size]
+        x, _ = self.slot_rnn(x) #[batch_size, dec_seq_len, dec_hidden_dim]
+        #print("after rnn")
+        #print(x.size())
+        x = x[:, -1, :] # last state is [batch_size, dec_hidden_dim]        
+        #print("after last state")
+        #print(x.size())
+        x = self.slot_post_dropout(x) # [batch_size, dec_hidden_dim]
+        #print("after dropout")
+        #print(x.size())
+        logits = self.slot_linear(x) # [batch_size, dec_vocab_size]
+        #x = self.softmax(x) # [batch_size, dec_vocab_size]
+        #print(x.size())
+        #print("loss: ")
+        #print(slots[:,my_index:my_index+1].size()) 
+        
+        
+        #print(logits.size())
+        #print(target.size())
+        #print(logits)
+        #print(target)
+        #input("asd")
+        loss = self.criterion(logits, target)
+        #print(loss.item()) 
+        return x, loss
+
+
 class MyEncoderDecoder(EncoderDecoder):
     def __init__(self, src_lookup, tgt_lookup, encoder, decoder, slot_sizes, dec_transfer_hidden, coverage_loss_weight, attention_loss_weight, device):
         super().__init__(src_lookup, tgt_lookup, encoder, decoder, device)
@@ -30,15 +76,12 @@ class MyEncoderDecoder(EncoderDecoder):
         self.slot_sizes = slot_sizes        
         slot_networks = []                        
         assert decoder.hidden_dim % 2 == 0, "Decoder hidden_dim should be even as the slot LSTMs are bidirectional."
-        self.dec = nn.Dropout(decoder.linear_dropout)
+        
         for i in range(len(self.slot_sizes)): # how many slots there are            
-            slot_pre_dropout = nn.Dropout(decoder.linear_dropout)
-            slot_rnn = nn.LSTM(decoder.emb_dim, int(decoder.hidden_dim/2), num_layers=decoder.num_layers, dropout=decoder.lstm_dropout, bidirectional=True, batch_first=True)
-            slot_post_dropout = nn.Dropout(decoder.linear_dropout)
-            slot_linear = nn.Linear(decoder.hidden_dim, self.slot_sizes[i])
-            slot_networks.append(nn.Sequential( slot_pre_dropout, slot_rnn, slot_post_dropout, slot_linear ) )
+            mc = MiniClassifier(vocab_size=self.slot_sizes[i], dec_emb_dim=decoder.emb_dim, dec_hidden_dim=decoder.hidden_dim, dec_num_layers=decoder.num_layers, dec_dropout=decoder.linear_dropout, dec_lstm_dropout=decoder.lstm_dropout)
+            slot_networks.append(mc)
+            
         self.slot_networks = nn.ModuleList(slot_networks)
-        self.slot_criterion = nn.KLDivLoss(reduction='batchmean')
         
         self.to(self.device)
 
@@ -52,7 +95,6 @@ class MyEncoderDecoder(EncoderDecoder):
             The output of the Encoder-Decoder with attention. Shape: [batch_size, seq_len_dec, n_class].
         """
         x, x_lenghts, x_mask = x_tuple[0], x_tuple[1], x_tuple[2]
-        y, y_lenghts, y_mask, slots = y_tuple[0], y_tuple[1], y_tuple[2], y_tuple[3]
         batch_size = x.shape[0]
         
         # Calculates the output of the encoder
@@ -84,36 +126,44 @@ class MyEncoderDecoder(EncoderDecoder):
 
         # now run slots based on output
         slot_loss = 0        
-        print(output.size())
-        slot_embeddings = self.decoder.embedding(torch.squeeze(torch.argmax(output, dim=2), dim=1)) # [batch_size, dec_seq_len, dec_vocab_size]
-        print(slot_embeddings.size())
-        #for slot_index in range(len(self.slot_sizes)):
-        #    print(slot_embeddings.size())
-        #    print(self.slot_networks[slot_index])
-        #    slot_output = self.slot_networks[slot_index](slot_embeddings)
-        for slot_network in self.slot_networks:
-            print(slot_network)
-            slot_output = self.dec(slot_embeddings)#slot_network(slot_embeddings)
-
+        if y_tuple is not None:
+            y, y_lenghts, y_mask, slots = y_tuple[0], y_tuple[1], y_tuple[2], y_tuple[3]
+            
+            #print(output.size())
+            slot_embeddings = self.decoder.embedding(torch.squeeze(torch.argmax(output, dim=2), dim=1)) # [batch_size, dec_seq_len, dec_vocab_size]
+            #print(slot_embeddings.size())
+            
+            for my_index, slot_network in enumerate(self.slot_networks):
+                #print(slot_network)
+                slot_output, s_loss = slot_network(slot_embeddings, slots, my_index)
+                slot_loss += s_loss
+            slot_loss /= len(self.slot_networks)
+            
         return output, attention_weights, coverage_loss, slot_loss
-    
-    def run_batch(self, X_tuple, y_tuple, criterion=None, tf_ratio=.0):        
+     
+    def run_batch(self, X_tuple, y_tuple=None, criterion=None, tf_ratio=.0):  
+        # train mode: X, Y, criterion and tf_ratio are supplied
+        # eval mode: X, Y, criterion are supplied, tf_ratio is default 0
+        # run mode: X is supplied, Y and tf_ratio are None, tf_ratio is default 0 
         (x_batch, x_batch_lenghts, x_batch_mask) = X_tuple
-        (y_batch, y_batch_lenghts, y_batch_mask, slots) = y_tuple
+        
+        if y_tuple is not None:
+            (y_batch, y_batch_lenghts, y_batch_mask, slots) = y_tuple
         
         if hasattr(self.decoder.attention, 'init_batch'):
-                self.decoder.attention.init_batch(x_batch.size()[0], x_batch.size()[1])
+            self.decoder.attention.init_batch(x_batch.size()[0], x_batch.size()[1])
         
         output, attention_weights, coverage_loss, slot_loss = self.forward(X_tuple, y_tuple, tf_ratio)
         
         display_variables = OrderedDict()
         
-        
         disp_total_loss = 0
         disp_gen_loss = 0
         disp_cov_loss = 0
-        disp_att_loss = 0        
+        disp_att_loss = 0 
+        disp_slt_loss = 0
         total_loss = 0
+        
         if criterion is not None:            
             gen_loss = criterion(output.view(-1, self.decoder.vocab_size), y_batch.contiguous().flatten())        
             disp_gen_loss = gen_loss.item()            
@@ -123,6 +173,9 @@ class MyEncoderDecoder(EncoderDecoder):
             #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, coverage_loss, coverage_loss_weight, coverage_loss_weight*coverage_loss, total_loss))
             
             if tf_ratio>.0: # additional loss for attention distribution , attention_weights is [batch_size, seq_len] and is a list              
+                total_loss += slot_loss
+                disp_slt_loss = slot_loss.item()
+                
                 batch_size = attention_weights.size(0)
                 dec_seq_len = attention_weights.size(1)
                 enc_seq_len = attention_weights.size(2)
@@ -150,6 +203,8 @@ class MyEncoderDecoder(EncoderDecoder):
             display_variables["gen_loss"] = disp_gen_loss
             display_variables["cov_loss"] = disp_cov_loss
             display_variables["att_loss"] = disp_att_loss
+            display_variables["slt_loss"] = disp_slt_loss
+            
             
         return output, total_loss, attention_weights, display_variables
         
