@@ -8,7 +8,7 @@ from models.util.lookup import Lookup
 import torch
 
 if len(sys.argv)!=2:
-    print("param: bpe or gpt2")
+    print("param: bpe or gpt2 or roberta")
     sys.exit(0)
 
 input_json_file = os.path.join("raw","data.json")
@@ -42,6 +42,12 @@ for MEI in MEIs:
         lookup_type = "gpt2"
         src_lookup_file_prefix = os.path.join("lookup","gpt2","src")
         tgt_lookup_file_prefix = os.path.join("lookup","gpt2","tgt")
+
+    if sys.argv[1] == "roberta":
+        lookup_type = "roberta"
+        src_lookup_file_prefix = os.path.join("lookup","roberta","src")
+        tgt_lookup_file_prefix = os.path.join("lookup","roberta","tgt")
+
 
     # load lookups
     try:
@@ -223,7 +229,7 @@ for MEI in MEIs:
             print("{} / {} ...".format(cnt, len(cpy_list)))
             
         try:    
-            if sys.argv[1] == "bpe":
+            if sys.argv[1] == "bpe" or sys.argv[1] == "roberta":
                 src_ids = src_lookup.encode(src_line, add_bos_eos_tokens=True)
             if sys.argv[1] == "gpt2":
                 src_ids = src_lookup.encode(src_line, add_bos_eos_tokens=False)

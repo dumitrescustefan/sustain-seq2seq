@@ -34,8 +34,8 @@ class Lookup():
             # add <PAD> special token
             self._tokenizer.add_special_tokens({'pad_token': '<PAD>'})
                         
-            for i in range(len(self._tokenizer)):
-                token = self._tokenizer.convert_ids_to_tokens(i)                       
+            #for i in range(len(self._tokenizer)):
+            #    token = self._tokenizer.convert_ids_to_tokens(i)                       
             if self._tokenizer._bos_token: # using _xxx_token instead of xxx_token to silence gpt2tokenizer not set errors
                 self.bos_token = self._tokenizer.bos_token
             if self._tokenizer._eos_token:
@@ -61,6 +61,27 @@ class Lookup():
             self.cls_token = "<CLS>"
             self.mask_token = "<MASK>"
             self._recreate_special_tokens()            
+        
+        if type == "roberta":
+            from pytorch_transformers import RobertaTokenizer 
+            self._tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+            # it is initialized by default with bos_token="<s>", eos_token="</s>", sep_token="</s>", cls_token="<s>", unk_token="<unk>", pad_token='<pad>', mask_token='<mask>'
+            #for i in range(len(self._tokenizer)):
+            #    token = self._tokenizer.convert_ids_to_tokens(i)                       
+            if self._tokenizer._bos_token: # using _xxx_token instead of xxx_token to silence gpt2tokenizer not set errors
+                self.bos_token = self._tokenizer.bos_token
+            if self._tokenizer._eos_token:
+                self.eos_token = self._tokenizer.eos_token
+            if self._tokenizer._unk_token:                
+                self.unk_token = self._tokenizer.unk_token
+            if self._tokenizer._sep_token:
+                self.sep_token = self._tokenizer.sep_token
+            if self._tokenizer._pad_token:
+                self.pad_token = self._tokenizer.pad_token
+            if self._tokenizer._cls_token:
+                self.cls_token = self._tokenizer.cls_token
+            if self._tokenizer._mask_token:
+                self.mask_token = self._tokenizer.mask_token            
         
         if file_prefix:
             self.load(file_prefix)
@@ -92,10 +113,27 @@ class Lookup():
             obj["special_token_map"] = self.special_token_map
             json.dump(obj, open(file_prefix+".special_tokens","w",encoding="utf8"), indent=4, sort_keys=True)
                         
-            
+        if self.type == "roberta":
+            special_tokens = {}
+            if self.bos_token:
+                special_tokens['bos_token'] = self.bos_token
+            if self.eos_token:
+                special_tokens['eos_token'] = self.eos_token
+            if self.unk_token:
+                special_tokens['unk_token'] = self.unk_token
+            if self.sep_token:
+                special_tokens['sep_token'] = self.sep_token
+            if self.pad_token:
+                special_tokens['pad_token'] = self.pad_token
+            if self.cls_token:
+                special_tokens['cls_token'] = self.cls_token
+            if self.mask_token:
+                special_tokens['mask_token'] = self.mask_token            
+            json.dump(special_tokens, open(file_prefix+".special_tokens","w",encoding="utf8"), indent=4, sort_keys=True)            
+            self._tokenizer.add_special_tokens(special_tokens) 
     
     def load(self, file_prefix):
-        if self.type == "gpt2":
+        if self.type == "gpt2" or self.type == "roberta":
             if os.path.exists(file_prefix+".special_tokens"):
                 special_tokens = json.load(open(file_prefix+".special_tokens","r",encoding="utf8"))            
                 if 'bos_token' in special_tokens:
@@ -174,13 +212,13 @@ class Lookup():
             self.special_token_map['mask_token'] = self.mask_token
                 
     def tokenize (self, text):
-        if self.type == "gpt2":
+        if self.type == "gpt2" or self.type == "roberta":
             return self._tokenizer.tokenize(text)
         if self.type == "bpe":
             return self._tokenizer.EncodeAsPieces(text)
         
     def convert_tokens_to_ids (self, tokens):
-        if self.type == "gpt2":
+        if self.type == "gpt2" or self.type == "roberta":
             return self._tokenizer.convert_tokens_to_ids(tokens)
         if self.type == "bpe":
             if isinstance(tokens, list):
@@ -191,7 +229,7 @@ class Lookup():
                 raise Exception("Lookup convert_tokens_to_ids error: token_ids is not str or list!")
                 
     def convert_ids_to_tokens (self, token_ids):
-        if self.type == "gpt2":
+        if self.type == "gpt2" or self.type == "roberta":
             return self._tokenizer.convert_ids_to_tokens(token_ids)
         if self.type == "bpe":
             if isinstance(token_ids, list):
@@ -202,7 +240,7 @@ class Lookup():
                 raise Exception("Lookup convert_ids_to_tokens error: token_ids is not int or list!")
                 
     def convert_tokens_to_string (self, tokens):
-        if self.type == "gpt2":
+        if self.type == "gpt2" or self.type == "roberta":
             return self._tokenizer.convert_tokens_to_string(tokens)
         if self.type == "bpe":
             if isinstance(tokens, list):
@@ -214,23 +252,36 @@ class Lookup():
     
     def encode (self, text, add_bos_eos_tokens=False):
         tokens = self.tokenize(text)
-        if add_bos_eos_tokens:
-            if not self.bos_token or not self.eos_token:
-                raise Exception("Lookup encode error: {} model does not have BOS or EOS tokens set!")            
-            return [self.convert_tokens_to_ids(self.bos_token)] + self.convert_tokens_to_ids(tokens) + [self.convert_tokens_to_ids(self.eos_token)]
+        if add_bos_eos_tokens:                        
+            if self.type == "roberta":
+                if not self.cls_token or not self.sep_token:
+                    raise Exception("Lookup encode error: {} model does not have CLS or SEP tokens set!")
+                return [self.convert_tokens_to_ids(self.cls_token)] + self.convert_tokens_to_ids(tokens) + [self.convert_tokens_to_ids(self.sep_token)]
+            else:
+                if not self.bos_token or not self.eos_token:
+                    raise Exception("Lookup encode error: {} model does not have BOS or EOS tokens set!")
+                return [self.convert_tokens_to_ids(self.bos_token)] + self.convert_tokens_to_ids(tokens) + [self.convert_tokens_to_ids(self.eos_token)]
         else:
             return self.convert_tokens_to_ids(tokens)
         
     def decode (self, token_ids, skip_bos_eos_tokens=False):                
-        if skip_bos_eos_tokens:            
-            if not self.bos_token or not self.eos_token:                
-                raise Exception("Lookup decode error: {} model does not have BOS or EOS tokens set!")                                  
-            if len(token_ids)>0:
-                if token_ids[0] == self.convert_tokens_to_ids(self.bos_token):
-                    token_ids = token_ids[1:]
-            if len(token_ids)>0:
-                if token_ids[-1] == self.convert_tokens_to_ids(self.eos_token):
-                    token_ids = token_ids[:-1]        
+        if skip_bos_eos_tokens:  
+            if self.type == "roberta":
+                if len(token_ids)>0:
+                    if token_ids[0] == self.convert_tokens_to_ids(self.cls_token):
+                        token_ids = token_ids[1:]
+                if len(token_ids)>0:
+                    if token_ids[-1] == self.convert_tokens_to_ids(self.sep_token):
+                        token_ids = token_ids[:-1]       
+            else:
+                if not self.bos_token or not self.eos_token:                
+                    raise Exception("Lookup decode error: {} model does not have BOS or EOS tokens set!")                                  
+                if len(token_ids)>0:
+                    if token_ids[0] == self.convert_tokens_to_ids(self.bos_token):
+                        token_ids = token_ids[1:]
+                if len(token_ids)>0:
+                    if token_ids[-1] == self.convert_tokens_to_ids(self.eos_token):
+                        token_ids = token_ids[:-1]        
         if len(token_ids)>0: 
             tokens = self.convert_ids_to_tokens(token_ids)                
             return self.convert_tokens_to_string(tokens)
@@ -247,7 +298,7 @@ class Lookup():
         return self._tokenizer.IdToPiece(id)
     
     def __len__(self):
-        if self.type == "gpt2":
+        if self.type == "gpt2" or self.type == "roberta":
             return len(self._tokenizer)
         if self.type == "bpe":
             return self.bpe_vocab_size+len(self.special_id2token)

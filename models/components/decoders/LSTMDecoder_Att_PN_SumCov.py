@@ -34,8 +34,12 @@ class Decoder(nn.Module):
         self.attention = Attention(encoder_size=input_size, decoder_size=hidden_dim, vocab_size=vocab_size, device=device)
 
         # overwrite output to allow context from the attention to be added to the output layer
-        self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, int((hidden_dim+input_size+emb_dim)/2))
-        self.vocab_linear = nn.Linear(int((hidden_dim+input_size+emb_dim)/2), vocab_size)
+        if vocab_size<10000:
+            intermediate_layer_size = int((hidden_dim+input_size+emb_dim)/2) # for bpe
+        else:
+            intermediate_layer_size = int(vocab_size/16) # for gpt2
+        self.output_linear = nn.Linear(hidden_dim+input_size+emb_dim, intermediate_layer_size)
+        self.vocab_linear = nn.Linear(intermediate_layer_size, vocab_size)
 
         # p_gen parameters
         """
@@ -60,6 +64,7 @@ class Decoder(nn.Module):
        
         
         dec_states = (dec_states[0].contiguous(), dec_states[1].contiguous())
+        hidden_states = []
         output = torch.zeros(batch_size,dec_seq_len-1,self.vocab_size).to(self.device)
         #output.requires_grad=False
         coverage = torch.zeros(batch_size, self.vocab_size).to(self.device)
@@ -94,7 +99,8 @@ class Decoder(nn.Module):
             # Calculates the i-th decoder output and state. We initialize the decoder state with (i-1)-th state.
             # [batch_size, 1, hidden_dim], [num_layers, batch_size, hidden_dim].
             dec_output, dec_states = self.lstm(lstm_input, dec_states)
-
+            hidden_states.append(dec_states)
+            
             # Maps the decoder output to the decoder vocab size space. 
             # [batch_size, 1, hidden_dim + encoder_dim + emb_dim] -> [batch_size, 1, vocab_size].            
             lin_input = torch.cat( (dec_output, context_vector.unsqueeze(1), prev_output_embeddings.unsqueeze(1)) , dim = 2)
@@ -143,7 +149,8 @@ class Decoder(nn.Module):
             # calculate the next coverage by adding step_attention_weights where appropriate                        
             coverage = coverage.scatter_add(1, src, step_attention_weights.squeeze(2))
             
-        # output is a tensor [batch_size, dec_seq_len, vocab_size], log-ged to be prepared for NLLLoss 
+        # output is a tensor [batch_size, dec_seq_len, vocab_size], is a prob dist (to be .log() for NLLLoss)
+        # hidden states is a list of LSTM states: ([num_layers * num_directions, batch, hidden_size], same)
         # attention_weights is a tensor [batch_size, dec_seq_len, enc_seq_len] elements 
         # coverage_loss is a scalar tensor        
-        return {'output':torch.log(output + 1e-31), 'attention_weights':attention_weights, 'coverage_loss':coverage_loss}
+        return {'output':torch.log(output + 1e-31), 'hidden_states': hidden_states, 'attention_weights':attention_weights, 'coverage_loss':coverage_loss}

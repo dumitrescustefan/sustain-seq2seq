@@ -206,7 +206,7 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
                     t_display_dict[key] = display_variables[key]                                 
             t_display_dict["cur_loss"] = loss.item()
             t_display_dict["loss"] = log_average_loss            
-            t_display_dict["x_y_len"] = str(len(batch[0][0]))+"/"+str(len(batch[1][0]))
+            t_display_dict["x/y"] = str(len(batch[0][0][0]))+"/"+str(len(batch[1][0][0]))
             t.set_postfix(ordered_dict = t_display_dict)
            
             del output, batch, loss 

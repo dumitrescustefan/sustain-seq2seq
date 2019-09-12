@@ -17,7 +17,7 @@ from models.util.lookup import Lookup
 from models.util.loaders.t2e import loader
 from models.util.utils import select_processing_device
 
-from models.t2e_lstm_fa_pn.model import MyEncoderDecoder
+from models.t2e_lstm_fa_pn_slotgpt2.model import MyEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
 from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
 
@@ -45,17 +45,17 @@ if __name__ == "__main__":
     #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
     #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
     
+    #data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
+    #src_lookup = Lookup(type="gpt2")
+    #tgt_lookup = Lookup(type="gpt2")
+    
     data_folder = os.path.join("..", "..", "data", "task2e", "ready", "gpt2")
     src_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "gpt2","src")
     tgt_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "gpt2","tgt")
     src_lookup = Lookup(type="gpt2")
     tgt_lookup = Lookup(type="gpt2")
-    
-    #data_folder = os.path.join("..", "..", "data", "task2e", "ready", "bpe")
-    #src_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "bpe","src-Business_Ethics-1024")
-    #tgt_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "bpe","src-Business_Ethics-1024")
-    #src_lookup = Lookup(type="bpe")
-    #tgt_lookup = Lookup(type="bpe")
     
     src_lookup.load(src_lookup_prefix)    
     tgt_lookup.load(tgt_lookup_prefix)
@@ -122,8 +122,18 @@ if __name__ == "__main__":
     print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, amsgrad=True)#, weight_decay=1e-3)
+    allowed_params = []
+    for name, param in model.named_parameters():
+        #if param.requires_grad:
+        if "gpt2" not in name:
+            allowed_params.append(param)
+            #print ("{} {}".format(name,param.data))
+            #print ("{}".format(param))
+    
+    #optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, amsgrad=True)#, weight_decay=1e-3)
+    optimizer = torch.optim.Adam(allowed_params, lr=3e-4, amsgrad=True)
     #optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=0.9)
+    #sys.exit(0)
     
     lr_scheduler = None
     
@@ -133,7 +143,7 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "t2e_lstm_fa_pn"), 
+          model_store_path = os.path.join("..", "..", "train", "t2e_lstm_fa_pn_slotgpt2"), 
           resume = False, 
           max_epochs = 500, 
           patience = 35, 

@@ -17,7 +17,7 @@ from models.util.lookup import Lookup
 from models.util.loaders.t2e import loader
 from models.util.utils import select_processing_device
 
-from models.t2e_lstm_fa_pn.model import MyEncoderDecoder
+from models.t2e_lstm_fa_pn_slotroberta.model import MyEncoderDecoder
 from models.components.encoders.LSTMEncoder import Encoder
 from models.components.decoders.LSTMDecoder_Att_PN_SumCov import Decoder
 
@@ -45,17 +45,17 @@ if __name__ == "__main__":
     #src_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","src-256")
     #tgt_lookup_prefix = os.path.join("..", "..", "data", "cmudict", "lookup", "bpe","tgt-256")
     
-    data_folder = os.path.join("..", "..", "data", "task2e", "ready", "gpt2")
-    src_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "gpt2","src")
-    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "gpt2","tgt")
-    src_lookup = Lookup(type="gpt2")
-    tgt_lookup = Lookup(type="gpt2")
+    #data_folder = os.path.join("..", "..", "data", "task2", "ready", "gpt2")
+    #src_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","src")
+    #tgt_lookup_prefix = os.path.join("..", "..", "data", "task2", "lookup", "gpt2","tgt")
+    #src_lookup = Lookup(type="gpt2")
+    #tgt_lookup = Lookup(type="gpt2")
     
-    #data_folder = os.path.join("..", "..", "data", "task2e", "ready", "bpe")
-    #src_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "bpe","src-Business_Ethics-1024")
-    #tgt_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "bpe","src-Business_Ethics-1024")
-    #src_lookup = Lookup(type="bpe")
-    #tgt_lookup = Lookup(type="bpe")
+    data_folder = os.path.join("..", "..", "data", "task2e", "ready", "roberta")
+    src_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "roberta","src")
+    tgt_lookup_prefix = os.path.join("..", "..", "data", "task2e", "lookup", "roberta","tgt")
+    src_lookup = Lookup(type="roberta")
+    tgt_lookup = Lookup(type="roberta")
     
     src_lookup.load(src_lookup_prefix)    
     tgt_lookup.load(tgt_lookup_prefix)
@@ -122,10 +122,15 @@ if __name__ == "__main__":
     print("Step-size: {}, lr: {} -> {}".format(step_size, end_lr/factor, end_lr))
     lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, [clr])
     """
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, amsgrad=True)#, weight_decay=1e-3)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=.1, momentum=0.9)
     
-    lr_scheduler = None
+    # Prepare optimizer and schedule (linear warmup and decay)
+    no_decay = ['bias', 'LayerNorm.weight']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        ]
+    optimizer = AdamW(optimizer_grouped_parameters, lr=5e-5, eps=1e-8)
+    lr_scheduler = WarmupLinearSchedule(optimizer, warmup_steps=0, t_total=len(train_loader)//50) #len(train_dataloader) // args.gradient_accumulation_steps * args.num_train_epochs
     
     criterion = nn.NLLLoss(ignore_index=tgt_lookup.convert_tokens_to_ids(tgt_lookup.pad_token))
     
@@ -133,7 +138,7 @@ if __name__ == "__main__":
           train_loader, 
           valid_loader,
           test_loader,                          
-          model_store_path = os.path.join("..", "..", "train", "t2e_lstm_fa_pn"), 
+          model_store_path = os.path.join("..", "..", "train", "t2e_lstm_fa_pn_slotroberta"), 
           resume = False, 
           max_epochs = 500, 
           patience = 35, 
