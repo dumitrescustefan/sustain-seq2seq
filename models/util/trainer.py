@@ -160,6 +160,8 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
         # train
         time_start = time.time()
         model.train()
+        model.start_train_epoch(current_epoch)
+        
         total_loss, log_average_loss, total_coverage_loss, log_total_coverage_loss, total_generator_loss, log_total_generator_loss = 0, 0, 0, 0, 0, 0
         t = tqdm(train_loader, mininterval=0.5, desc="Epoch " + str(current_epoch)+" [train]", unit="b") #ncols=120,
         for batch_index, batch in enumerate(t):                    
@@ -210,7 +212,9 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             del output, batch, loss 
             
             #break
-            
+        
+        model.end_train_epoch()
+        
         del t
         gc.collect()        
         if model.cuda:

@@ -52,7 +52,7 @@ class MiniClassifier(nn.Module):
         #input("asd")
         loss = self.criterion(logits, target)
         #print(loss.item()) 
-        return x, loss
+        return logits, loss
 
 
 class MyEncoderDecoder(EncoderDecoder):
@@ -62,7 +62,9 @@ class MyEncoderDecoder(EncoderDecoder):
         self.coverage_loss_weight = coverage_loss_weight
         self.attention_loss_weight = attention_loss_weight
         self.dec_transfer_hidden = dec_transfer_hidden
-       
+        self.current_epoch = 0 
+        self.start_slot_loss_epoch = 2 # start calculating loss after this epoch 
+        
         if dec_transfer_hidden == True:
             assert encoder.num_layers == decoder.num_layers, "For transferring the last hidden state from encoder to decoder, both must have the same number of layers."
 
@@ -84,6 +86,37 @@ class MyEncoderDecoder(EncoderDecoder):
         self.slot_networks = nn.ModuleList(slot_networks)
         
         self.to(self.device)
+
+    def start_train_epoch (self, current_epoch):
+        self.current_epoch = current_epoch
+        self.slot_cfmatrix = []
+        for i in range(len(self.slot_sizes)):
+            self.slot_cfmatrix.append(torch.zeros((self.slot_sizes[i], self.slot_sizes[i]), device = self.device))
+     
+    def end_train_epoch (self):   
+        print()
+        overall_acc = 0
+        for i in range(len(self.slot_sizes)):
+            cf = self.slot_cfmatrix[i]
+            vocab_size = self.slot_sizes[i]
+            acc = 0
+            diag_sum = torch.sum(cf.diag())
+            total_sum = torch.sum(cf)
+            acc = (diag_sum/total_sum).item()
+            overall_acc+=acc
+            print("Slot index {} has accuracy {:.2f}".format(i, acc))
+            """
+            for j in range(vocab_size):
+                for q in range(vocab_size):
+                    val = int(cf[j,q].item())
+                    if val == 0 :
+                        val = "•" #◦
+                    else:
+                        val = str(val)
+                    print(val.rjust(4, ' '), end='')
+                print()
+            """
+        print("Slot accuracy: {:.3f}".format(overall_acc/len(self.slot_sizes)))      
 
     def forward(self, x_tuple, y_tuple, teacher_forcing_ratio=0.):
         """
@@ -126,7 +159,7 @@ class MyEncoderDecoder(EncoderDecoder):
 
         # now run slots based on output
         slot_loss = 0        
-        if y_tuple is not None:
+        if y_tuple is not None and self.current_epoch > self.start_slot_loss_epoch:
             y, y_lenghts, y_mask, slots = y_tuple[0], y_tuple[1], y_tuple[2], y_tuple[3]
             
             #print(output.size())
@@ -135,8 +168,15 @@ class MyEncoderDecoder(EncoderDecoder):
             
             for my_index, slot_network in enumerate(self.slot_networks):
                 #print(slot_network)
-                slot_output, s_loss = slot_network(slot_embeddings, slots, my_index)
+                slot_logits, s_loss = slot_network(slot_embeddings, slots, my_index) # [batch_size, len(self.slot_sizes[my_index])]
                 slot_loss += s_loss
+                
+                # update cf matrix
+                my_prediction = torch.argmax(slot_logits, dim = 1) # [batch_size]
+                target = slots[:,my_index] # [batch_size]
+                for b in range(batch_size):                    
+                    self.slot_cfmatrix[my_index][target[b], my_prediction[b]]+=1
+                
             slot_loss /= len(self.slot_networks)
             
         return output, attention_weights, coverage_loss, slot_loss
@@ -171,11 +211,11 @@ class MyEncoderDecoder(EncoderDecoder):
             disp_cov_loss = self.coverage_loss_weight*coverage_loss.item()
             
             #print("\nloss {:.3f}, aux {:.3f}*{}={:.3f}, total {}\n".format( loss, coverage_loss, coverage_loss_weight, coverage_loss_weight*coverage_loss, total_loss))
-            
-            if tf_ratio>.0: # additional loss for attention distribution , attention_weights is [batch_size, seq_len] and is a list              
+            if self.current_epoch > self.start_slot_loss_epoch:
                 total_loss += slot_loss
                 disp_slt_loss = slot_loss.item()
-                
+                    
+            if tf_ratio>.0: # additional loss for attention distribution , attention_weights is [batch_size, seq_len] and is a list              
                 batch_size = attention_weights.size(0)
                 dec_seq_len = attention_weights.size(1)
                 enc_seq_len = attention_weights.size(2)
