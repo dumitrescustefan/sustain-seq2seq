@@ -180,10 +180,10 @@ def train(model, train_loader, valid_loader=None, test_loader=None, model_store_
             output, loss, attention_weights, display_variables = model.run_batch(batch[0], batch[1], criterion, tf_ratio)
             
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)            
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.)                        
+            optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
-            optimizer.step()
              
             total_loss += loss.item()
             log_average_loss = total_loss / (batch_index+1)

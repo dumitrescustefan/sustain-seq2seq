@@ -8,20 +8,30 @@ import numpy as np
 import torch.nn.functional as F
 import scipy.stats
 from models.components.encodersdecoders.EncoderDecoder import EncoderDecoder
-from pytorch_transformers import RobertaModel
+from models.components.attention.MultiHeadAttention import MultiHeadAttention
 
 class LinearHead(nn.Module):
-    def __init__(self, vocab_size, hidden_dim):
-        super().__init__()
+    def __init__(self, vocab_size, hidden_dim, device):
+        super().__init__()        
         self.vocab_size = vocab_size                
-        self.dense = nn.Linear(hidden_dim, hidden_dim)
+        
+        self.attention = MultiHeadAttention(d_model = hidden_dim, num_heads=int(hidden_dim/64), dropout = 0.15, custom_query_size = None)
+        #Attention(encoder_size=hidden_dim, decoder_size=hidden_dim, type="additive", device=device)
+        self.dense = nn.Linear(hidden_dim, hidden_dim*2)
         self.dropout = nn.Dropout(0.25)
-        self.out_proj = nn.Linear(hidden_dim, vocab_size)
+        self.out_proj = nn.Linear(hidden_dim*2, vocab_size)
         self.criterion = nn.CrossEntropyLoss() #nn.KLDivLoss(reduction='batchmean')
-    
+        self.device = device
+        self.to(device)
+        
     def forward(self, features, slots, my_index): 
-        x = features[0][:, 0, :]  # take <s> token (equiv. to [CLS])
-        x = self.dropout(x)
+        #print(features.size())
+        self_attention = self.attention(features, features, features) # [batch_size, dec_seq_len, hidden_dim]
+        #print(self_attention.size())
+        sum_attention = torch.sum(self_attention, dim = 1)#.unsqueeze(2) 
+        #print(sum_attention.size())
+        
+        x = self.dropout(sum_attention)
         x = self.dense(x)
         x = torch.tanh(x)
         x = self.dropout(x)
@@ -38,7 +48,7 @@ class MyEncoderDecoder(EncoderDecoder):
         self.attention_loss_weight = attention_loss_weight
         self.dec_transfer_hidden = dec_transfer_hidden
         self.current_epoch = 0 
-        self.start_slot_loss_epoch = 4 # start calculating loss after this epoch 
+        self.start_slot_loss_epoch = 5 # start calculating loss after this epoch 
         
         if dec_transfer_hidden == True:
             assert encoder.num_layers == decoder.num_layers, "For transferring the last hidden state from encoder to decoder, both must have the same number of layers."
@@ -51,13 +61,10 @@ class MyEncoderDecoder(EncoderDecoder):
         
         # slot values prediction
         self.slot_sizes = slot_sizes        
-                
-        self.roberta = RobertaModel.from_pretrained('roberta-base')
-        self.roberta.resize_token_embeddings(len(tgt_lookup))
-        
+       
         slot_linear_heads = []                                
         for i in range(len(self.slot_sizes)): # how many slots there are            
-            mc = LinearHead(vocab_size=self.slot_sizes[i], hidden_dim=768) # !!!!!!! this could change if non -base model is used!!!! hardcoded because I'm lazy
+            mc = LinearHead(vocab_size=self.slot_sizes[i], hidden_dim=decoder.hidden_dim, device=self.device)
             slot_linear_heads.append(mc)            
         self.slot_linear_heads = nn.ModuleList(slot_linear_heads)
         
@@ -138,12 +145,17 @@ class MyEncoderDecoder(EncoderDecoder):
         if y_tuple is not None and self.current_epoch > self.start_slot_loss_epoch:
             y, y_lenghts, y_mask, slots = y_tuple[0], y_tuple[1], y_tuple[2], y_tuple[3]
             
-            slot_inputs = torch.squeeze(torch.argmax(output, dim=2), dim=1) # [batch_size, dec_seq_len]                                  
+            #slot_inputs = torch.squeeze(torch.argmax(output, dim=2), dim=1) # [batch_size, dec_seq_len]                                  
             # cut inputs at length!
-            features = self.roberta(slot_inputs)
+            #features = self.roberta(slot_inputs)
             
             #for i in range(batch_size):
             #    output = self.roberta(self.inputs)
+            dec_seq_len = output.size(1)-1
+            features = output.new(batch_size, dec_seq_len, self.decoder.hidden_dim)
+            for s in range(dec_seq_len):
+                hn = hidden_states[s][0].view(self.decoder.num_layers, 1, batch_size, self.decoder.hidden_dim)                
+                features[:, s, :] = hn[-1,:,:,:]
             
             for my_index, slot_linear_head in enumerate(self.slot_linear_heads):                
                 slot_logits, s_loss = slot_linear_head(features, slots, my_index) # [batch_size, len(self.slot_sizes[my_index])]
