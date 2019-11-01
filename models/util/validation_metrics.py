@@ -7,7 +7,7 @@ from models.util.utils import clean_sequences
 import torch
 
 
-def evaluate(y_true, y_pred, lookup, cut_at_eos=True, use_accuracy=True, use_bleu=True, use_meteor=True, use_rogue=True, use_sequence_accuracy_rate=True):
+def evaluate(y_true, y_pred, lookup, cut_at_eos=True, use_accuracy=True, use_bleu=True, use_meteor=True, use_rouge=True, use_sequence_accuracy_rate=True):
     #print("\nEvaluation results:\n")
     if cut_at_eos:
         y_true = clean_sequences(y_true, lookup)
@@ -34,9 +34,9 @@ def evaluate(y_true, y_pred, lookup, cut_at_eos=True, use_accuracy=True, use_ble
         eval["meteor"] = meteor
         eval["score"] += meteor
         count+=1.
-    if use_rogue:
+    if use_rouge:
         rouge_r, rouge_p, rouge_f = rouge_l_score(y_true, y_pred, lookup)
-        #print("Rogue-l score: recall-{0:.4f} precision-{0:.4f} f1-{0:.4f}".format(rouge_r, rouge_p, rouge_f))
+        #print("Rouge-l score: recall-{0:.4f} precision-{0:.4f} f1-{0:.4f}".format(rouge_r, rouge_p, rouge_f))
         eval["rouge_l_r"] = rouge_r
         eval["rouge_l_p"] = rouge_p
         eval["rouge_l_f"] = rouge_f
